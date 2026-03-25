@@ -74,7 +74,7 @@ ON alignment_segments FOR SELECT
 USING (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -84,7 +84,7 @@ ON alignment_segments FOR INSERT
 WITH CHECK (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -94,7 +94,7 @@ ON alignment_segments FOR UPDATE
 USING (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -104,7 +104,7 @@ ON alignment_segments FOR DELETE
 USING (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -114,7 +114,7 @@ ON alignment_checkpoints FOR SELECT
 USING (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -124,7 +124,7 @@ ON alignment_checkpoints FOR INSERT
 WITH CHECK (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -134,7 +134,7 @@ ON alignment_checkpoints FOR UPDATE
 USING (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -144,7 +144,7 @@ ON alignment_checkpoints FOR DELETE
 USING (
   section_id IN (
     SELECT id FROM drainer_sections
-    WHERE crew_id = ANY(get_admin_crew_ids())
+    WHERE crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -155,7 +155,7 @@ USING (
   segment_id IN (
     SELECT as2.id FROM alignment_segments as2
     JOIN drainer_sections ds ON as2.section_id = ds.id
-    WHERE ds.crew_id = ANY(get_admin_crew_ids())
+    WHERE ds.crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -166,7 +166,7 @@ WITH CHECK (
   segment_id IN (
     SELECT as2.id FROM alignment_segments as2
     JOIN drainer_sections ds ON as2.section_id = ds.id
-    WHERE ds.crew_id = ANY(get_admin_crew_ids())
+    WHERE ds.crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 
@@ -177,7 +177,7 @@ USING (
   segment_id IN (
     SELECT as2.id FROM alignment_segments as2
     JOIN drainer_sections ds ON as2.section_id = ds.id
-    WHERE ds.crew_id = ANY(get_admin_crew_ids())
+    WHERE ds.crew_id IN (SELECT get_admin_crew_ids())
   )
 );
 

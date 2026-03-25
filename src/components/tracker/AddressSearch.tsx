@@ -18,6 +18,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [shouldAutoSelect, setShouldAutoSelect] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -63,6 +64,14 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
     }
   }, []);
 
+  // Auto-select first result when Enter was pressed before results arrived
+  useEffect(() => {
+    if (shouldAutoSelect && results.length > 0) {
+      handleSelect(results[0]);
+      setShouldAutoSelect(false);
+    }
+  }, [results, shouldAutoSelect]);
+
   const handleChange = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -83,6 +92,20 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
   const handleKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setOpen(false);
+    }
+    if (e.key === "Enter") {
+      e.preventDefault();
+      if (open && results.length > 0) {
+        // Select first result
+        handleSelect(results[0]);
+      } else if (query.trim().length >= 3) {
+        // Force search and auto-select first result
+        if (debounceRef.current) clearTimeout(debounceRef.current);
+        search(query).then(() => {
+          // Will be handled by the effect below
+        });
+        setShouldAutoSelect(true);
+      }
     }
   };
 
