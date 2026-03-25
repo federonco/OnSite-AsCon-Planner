@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import dynamic from "next/dynamic";
 import ViewportControls from "@/components/tracker/ViewportControls";
 import LookaheadPanel from "@/components/tracker/LookaheadPanel";
@@ -9,7 +9,11 @@ import type { SegmentWithStatus, AlignmentCheckpoint } from "@/lib/types";
 import type { SegmentStatus } from "@/lib/constants";
 import AddressSearch from "@/components/tracker/AddressSearch";
 import ShapefileLoader from "@/components/tracker/ShapefileLoader";
+import CheckpointCreator from "@/components/tracker/CheckpointCreator";
 import Link from "next/link";
+
+// Hardcoded section ID for McLennan Dr - Sec 3
+const SECTION_ID = "95ed700f-e11c-45f8-8ada-d4b947d2d96e";
 
 // Dynamic import for Leaflet (SSR incompatible)
 const PipelineMap = dynamic(() => import("@/components/tracker/PipelineMap"), {
@@ -50,8 +54,10 @@ export default function TrackerPage() {
     }
   }, []);
 
-  // Expose fetchData for future section picker usage
-  void fetchData;
+  // Load data on mount
+  useEffect(() => {
+    fetchData(SECTION_ID);
+  }, [fetchData]);
 
   const handleUpdateStatus = useCallback(
     async (segmentId: string, status: SegmentStatus) => {
@@ -111,6 +117,15 @@ export default function TrackerPage() {
   const handleAddressSelect = useCallback((lat: number, lng: number) => {
     if (mapRef.current) {
       mapRef.current.flyTo([lat, lng], 16, { duration: 1.5 });
+    }
+  }, []);
+
+  const refreshCheckpoints = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/checkpoints?section_id=${SECTION_ID}`);
+      if (res.ok) setCheckpoints(await res.json());
+    } catch (err) {
+      console.error("Failed to refresh checkpoints:", err);
     }
   }, []);
 
@@ -176,6 +191,11 @@ export default function TrackerPage() {
               onClose={() => setSelectedSegment(null)}
             />
           )}
+
+          <CheckpointCreator
+            sectionId={SECTION_ID}
+            onCreated={refreshCheckpoints}
+          />
 
           <LookaheadPanel
             checkpoints={checkpoints}
