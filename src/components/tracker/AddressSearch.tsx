@@ -13,12 +13,27 @@ interface AddressSearchProps {
   onSelect: (lat: number, lng: number, label: string) => void;
 }
 
+async function geocode(q: string): Promise<SearchResult[]> {
+  const params = new URLSearchParams({
+    q,
+    format: "json",
+    limit: "5",
+    countrycodes: "au",
+    viewbox: "114.5,-33.0,117.0,-30.5",
+    bounded: "0",
+  });
+  const res = await fetch(
+    `https://nominatim.openstreetmap.org/search?${params}`,
+    { headers: { "User-Agent": "OnSitePipelineTracker/1.0" } }
+  );
+  return res.json();
+}
+
 export default function AddressSearch({ onSelect }: AddressSearchProps) {
   const [query, setQuery] = useState("");
   const [results, setResults] = useState<SearchResult[]>([]);
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [shouldAutoSelect, setShouldAutoSelect] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
 
@@ -33,78 +48,71 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
     return () => document.removeEventListener("mousedown", handleClick);
   }, []);
 
-  const search = useCallback(async (q: string) => {
-    if (q.trim().length < 3) {
-      setResults([]);
+  const selectResult = useCallback(
+    (result: SearchResult) => {
+      const lat = parseFloat(result.lat);
+      const lng = parseFloat(result.lon);
+      const shortName = result.display_name.split(",").slice(0, 2).join(",").trim();
+      setQuery(shortName);
       setOpen(false);
-      return;
-    }
-
-    setLoading(true);
-    try {
-      const params = new URLSearchParams({
-        q,
-        format: "json",
-        limit: "5",
-        countrycodes: "au",
-        viewbox: "114.5,-33.0,117.0,-30.5", // Perth / WA region bias
-        bounded: "0",
-      });
-      const res = await fetch(
-        `https://nominatim.openstreetmap.org/search?${params}`,
-        { headers: { "User-Agent": "OnSitePipelineTracker/1.0" } }
-      );
-      const data: SearchResult[] = await res.json();
-      setResults(data);
-      setOpen(data.length > 0);
-    } catch {
       setResults([]);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+      onSelect(lat, lng, shortName);
+    },
+    [onSelect]
+  );
 
-  // Auto-select first result when Enter was pressed before results arrived
-  useEffect(() => {
-    if (shouldAutoSelect && results.length > 0) {
-      handleSelect(results[0]);
-      setShouldAutoSelect(false);
-    }
-  }, [results, shouldAutoSelect]);
-
+  // Debounced search for dropdown while typing
   const handleChange = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => search(value), 400);
+    debounceRef.current = setTimeout(async () => {
+      if (value.trim().length < 3) {
+        setResults([]);
+        setOpen(false);
+        return;
+      }
+      setLoading(true);
+      try {
+        const data = await geocode(value);
+        setResults(data);
+        setOpen(data.length > 0);
+      } catch {
+        setResults([]);
+      } finally {
+        setLoading(false);
+      }
+    }, 400);
   };
 
-  const handleSelect = (result: SearchResult) => {
-    const lat = parseFloat(result.lat);
-    const lng = parseFloat(result.lon);
-    // Show short name (first 2 parts)
-    const shortName = result.display_name.split(",").slice(0, 2).join(",").trim();
-    setQuery(shortName);
-    setOpen(false);
-    setResults([]);
-    onSelect(lat, lng, shortName);
-  };
-
-  const handleKeyDown = (e: React.KeyboardEvent) => {
+  // Enter: immediately search and fly to first result
+  const handleKeyDown = async (e: React.KeyboardEvent) => {
     if (e.key === "Escape") {
       setOpen(false);
+      return;
     }
     if (e.key === "Enter") {
       e.preventDefault();
+      // If dropdown is open, pick first result
       if (open && results.length > 0) {
-        // Select first result
-        handleSelect(results[0]);
-      } else if (query.trim().length >= 3) {
-        // Force search and auto-select first result
-        if (debounceRef.current) clearTimeout(debounceRef.current);
-        search(query).then(() => {
-          // Will be handled by the effect below
-        });
-        setShouldAutoSelect(true);
+        selectResult(results[0]);
+        return;
+      }
+      // Otherwise, force an immediate search
+      if (query.trim().length < 3) return;
+      if (debounceRef.current) clearTimeout(debounceRef.current);
+      setLoading(true);
+      try {
+        const data = await geocode(query);
+        if (data.length > 0) {
+          selectResult(data[0]);
+        } else {
+          setResults([]);
+          setOpen(false);
+        }
+      } catch {
+        // ignore
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -136,7 +144,7 @@ export default function AddressSearch({ onSelect }: AddressSearchProps) {
           {results.map((r) => (
             <li key={r.place_id}>
               <button
-                onClick={() => handleSelect(r)}
+                onClick={() => selectResult(r)}
                 className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-gray-700 transition-colors border-b border-gray-700 last:border-b-0"
               >
                 <div className="truncate font-medium">
