@@ -8,6 +8,7 @@ import StatusUpdater from "@/components/tracker/StatusUpdater";
 import type { SegmentWithStatus, AlignmentCheckpoint } from "@/lib/types";
 import type { SegmentStatus } from "@/lib/constants";
 import AddressSearch from "@/components/tracker/AddressSearch";
+import ShapefileLoader from "@/components/tracker/ShapefileLoader";
 import Link from "next/link";
 
 // Dynamic import for Leaflet (SSR incompatible)
@@ -25,6 +26,7 @@ export default function TrackerPage() {
   const [checkpoints, setCheckpoints] = useState<AlignmentCheckpoint[]>([]);
   const [selectedSegment, setSelectedSegment] = useState<SegmentWithStatus | null>(null);
   const [loading, setLoading] = useState(false);
+  const [alignmentGeojson, setAlignmentGeojson] = useState<GeoJSON.FeatureCollection | null>(null);
   const mapRef = useRef<L.Map | null>(null);
 
   // Calculate laying front chainage
@@ -141,10 +143,11 @@ export default function TrackerPage() {
             onSegmentClick={setSelectedSegment}
             onCheckpointClick={handleCheckpointSelect}
             onMapReady={handleMapReady}
+            alignmentGeojson={alignmentGeojson}
           />
 
           {/* Empty state overlay */}
-          {!loading && segments.length === 0 && (
+          {!loading && segments.length === 0 && !alignmentGeojson && (
             <div className="absolute inset-0 flex items-center justify-center bg-black/50 rounded-lg pointer-events-none">
               <div className="text-center pointer-events-auto">
                 <p className="text-gray-300 text-lg mb-2">No alignment data loaded</p>
@@ -158,6 +161,8 @@ export default function TrackerPage() {
 
         {/* Side panel */}
         <aside className="w-80 bg-gray-950 border-l border-gray-800 p-4 space-y-4 overflow-y-auto">
+          <ShapefileLoader onLoaded={setAlignmentGeojson} />
+
           <ViewportControls
             segments={segments}
             onGoToFront={handleGoToFront}

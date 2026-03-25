@@ -5,6 +5,7 @@ import { MapContainer, TileLayer } from "react-leaflet";
 import L from "leaflet";
 import SegmentLayer from "./SegmentLayer";
 import CheckpointLayer from "./CheckpointLayer";
+import AlignmentLayer from "./AlignmentLayer";
 import type { SegmentWithStatus, AlignmentCheckpoint } from "@/lib/types";
 
 // Fix Leaflet default icon paths in Next.js
@@ -16,6 +17,7 @@ interface PipelineMapProps {
   onSegmentClick?: (segment: SegmentWithStatus) => void;
   onCheckpointClick?: (checkpoint: AlignmentCheckpoint) => void;
   onMapReady?: (map: L.Map) => void;
+  alignmentGeojson?: GeoJSON.FeatureCollection | null;
 }
 
 // Perth, WA default center
@@ -33,6 +35,7 @@ export default function PipelineMap({
   onSegmentClick,
   onCheckpointClick,
   onMapReady,
+  alignmentGeojson,
 }: PipelineMapProps) {
   const mapRef = useRef<L.Map | null>(null);
 
@@ -56,6 +59,17 @@ export default function PipelineMap({
     }
   }, [segments]);
 
+  // Fit map to alignment geojson when loaded (and no segments yet)
+  useEffect(() => {
+    if (mapRef.current && alignmentGeojson && segments.length === 0) {
+      const geoLayer = L.geoJSON(alignmentGeojson);
+      const bounds = geoLayer.getBounds();
+      if (bounds.isValid()) {
+        mapRef.current.fitBounds(bounds, { padding: [50, 50] });
+      }
+    }
+  }, [alignmentGeojson, segments]);
+
   return (
     <MapContainer
       center={DEFAULT_CENTER}
@@ -64,6 +78,7 @@ export default function PipelineMap({
       ref={mapRef}
     >
       <TileLayer url={ESRI_SATELLITE_URL} attribution={ESRI_ATTRIBUTION} maxZoom={19} />
+      <AlignmentLayer geojson={alignmentGeojson || null} />
       <SegmentLayer segments={segments} onSegmentClick={onSegmentClick} />
       <CheckpointLayer checkpoints={checkpoints} onCheckpointClick={onCheckpointClick} />
     </MapContainer>
