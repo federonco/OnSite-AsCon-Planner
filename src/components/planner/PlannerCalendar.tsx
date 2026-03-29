@@ -198,6 +198,7 @@ export default function PlannerCalendar({
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="plannerHorizon"
         initialDate={initialDate}
+        firstDay={1}
         events={events}
         editable={true}
         selectable={true}

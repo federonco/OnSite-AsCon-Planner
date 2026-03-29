@@ -6,6 +6,8 @@ import { isValidDateOnlyString, toDateOnly } from "@/lib/planner-date";
 
 export const dynamic = "force-dynamic";
 
+const NOTES_MAX = 4000;
+
 function parseDateParam(v: string | null): string | null {
   if (!v) return null;
   const d = toDateOnly(v);
@@ -58,10 +60,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "title and origin_date (YYYY-MM-DD) are required" }, { status: 400 });
   }
 
+  let notes: string | null = null;
+  if (body.notes != null && typeof body.notes === "string" && body.notes.trim() !== "") {
+    notes = body.notes.trim().slice(0, NOTES_MAX);
+  }
+
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("daily_tasks")
-    .insert({ title, origin_date })
+    .insert({ title, origin_date, notes })
     .select("*")
     .single();
 
@@ -87,17 +94,39 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "id is required" }, { status: 400 });
   }
 
-  let completed_on_date: string | null = null;
-  if (body.completed_on_date === null) {
-    completed_on_date = null;
-  } else if (typeof body.completed_on_date === "string") {
-    const d = parseDateParam(body.completed_on_date);
-    if (!d) {
-      return NextResponse.json({ error: "completed_on_date must be YYYY-MM-DD or null" }, { status: 400 });
+  const hasCompletion = "completed_on_date" in body;
+  const hasNotes = "notes" in body;
+  if (!hasCompletion && !hasNotes) {
+    return NextResponse.json(
+      { error: "Provide completed_on_date and/or notes" },
+      { status: 400 }
+    );
+  }
+
+  let completed_on_date: string | null | undefined;
+  if (hasCompletion) {
+    if (body.completed_on_date === null) {
+      completed_on_date = null;
+    } else if (typeof body.completed_on_date === "string") {
+      const d = parseDateParam(body.completed_on_date);
+      if (!d) {
+        return NextResponse.json({ error: "completed_on_date must be YYYY-MM-DD or null" }, { status: 400 });
+      }
+      completed_on_date = d;
+    } else {
+      return NextResponse.json({ error: "completed_on_date invalid" }, { status: 400 });
     }
-    completed_on_date = d;
-  } else {
-    return NextResponse.json({ error: "completed_on_date is required (date or null)" }, { status: 400 });
+  }
+
+  let notes: string | null | undefined;
+  if (hasNotes) {
+    if (body.notes === null || body.notes === "") {
+      notes = null;
+    } else if (typeof body.notes === "string") {
+      notes = body.notes.slice(0, NOTES_MAX);
+    } else {
+      return NextResponse.json({ error: "notes must be string or null" }, { status: 400 });
+    }
   }
 
   const supabase = getSupabaseAdmin();
@@ -120,9 +149,13 @@ export async function PATCH(req: NextRequest) {
     );
   }
 
+  const updateRow: Record<string, unknown> = {};
+  if (hasCompletion) updateRow.completed_on_date = completed_on_date;
+  if (hasNotes) updateRow.notes = notes;
+
   const { data, error } = await supabase
     .from("daily_tasks")
-    .update({ completed_on_date })
+    .update(updateRow)
     .eq("id", id)
     .select("*")
     .single();

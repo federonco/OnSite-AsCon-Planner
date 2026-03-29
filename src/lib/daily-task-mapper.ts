@@ -15,11 +15,17 @@ export function mapRowToDailyTask(row: Record<string, unknown>): DailyTask | nul
     completed_on_date = /^\d{4}-\d{2}-\d{2}$/.test(c) ? c : null;
   }
 
+  let notes: string | null = null;
+  if (row.notes != null && String(row.notes).trim() !== "") {
+    notes = String(row.notes).slice(0, 4000);
+  }
+
   return {
     id,
     title,
     origin_date,
     completed_on_date,
+    notes,
     created_at: row.created_at != null ? String(row.created_at) : new Date().toISOString(),
     updated_at: row.updated_at != null ? String(row.updated_at) : new Date().toISOString(),
   };

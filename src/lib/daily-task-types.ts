@@ -3,6 +3,8 @@ export interface DailyTask {
   title: string;
   origin_date: string;
   completed_on_date: string | null;
+  /** Optional notes / comments for the task */
+  notes: string | null;
   created_at: string;
   updated_at: string;
 }
