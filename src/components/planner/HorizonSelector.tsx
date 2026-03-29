@@ -1,0 +1,31 @@
+"use client";
+
+import { HORIZON_OPTIONS, HorizonWeeks } from "@/lib/planner-types";
+import { cn } from "@/lib/cn";
+
+interface HorizonSelectorProps {
+  value: HorizonWeeks;
+  onChange: (weeks: HorizonWeeks) => void;
+}
+
+export default function HorizonSelector({ value, onChange }: HorizonSelectorProps) {
+  return (
+    <div className="flex flex-wrap gap-1" role="group" aria-label="Planning horizon">
+      {HORIZON_OPTIONS.map((weeks) => (
+        <button
+          key={weeks}
+          type="button"
+          onClick={() => onChange(weeks)}
+          className={cn(
+            "rounded-dashboard-sm px-3 py-1.5 text-dashboard-sm font-medium transition-[background-color,color,box-shadow] duration-dashboard-fast ease-dashboard",
+            value === weeks
+              ? "bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] text-white shadow-dashboard-card"
+              : "bg-dashboard-bg text-dashboard-text-secondary hover:bg-white hover:text-dashboard-text-primary hover:shadow-dashboard-card"
+          )}
+        >
+          {weeks}W
+        </button>
+      ))}
+    </div>
+  );
+}

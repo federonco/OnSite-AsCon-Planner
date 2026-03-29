@@ -9,9 +9,18 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@fullcalendar/daygrid": "^6.1.20",
+    "@fullcalendar/interaction": "^6.1.20",
+    "@fullcalendar/react": "^6.1.20",
     "@supabase/supabase-js": "^2.99.3",
     "@turf/turf": "^7.3.4",
     "@types/leaflet": "^1.9.21",
+    "date-fns": "^4.1.0",
+    "date-holidays": "^3.26.11",
+    "fast-xml-parser": "^5.5.9",
+    "gantt-task-react": "^0.3.9",
+    "html2canvas": "^1.4.1",
+    "jspdf": "^4.2.1",
     "leaflet": "^1.9.4",
     "next": "14.2.35",
     "react": "^18",

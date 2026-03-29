@@ -17,11 +17,96 @@
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-inter), Inter, system-ui, sans-serif;
 }
 
 @layer utilities {
   .text-balance {
     text-wrap: balance;
   }
+}
+
+/* FullCalendar — dashboard light workspace (matches design tokens) */
+.planner-calendar .fc {
+  --fc-border-color: #e6e9f0;
+  --fc-button-bg-color: #ffffff;
+  --fc-button-border-color: #e6e9f0;
+  --fc-button-hover-bg-color: #f5f7fb;
+  --fc-button-hover-border-color: #e6e9f0;
+  --fc-button-active-bg-color: #5b5fef;
+  --fc-button-active-border-color: #5b5fef;
+  --fc-today-bg-color: rgba(91, 95, 239, 0.08);
+  --fc-page-bg-color: transparent;
+  --fc-neutral-bg-color: #f5f7fb;
+  --fc-list-event-hover-bg-color: #f9fafb;
+  --fc-highlight-color: rgba(91, 95, 239, 0.12);
+  --fc-non-business-color: rgba(0, 0, 0, 0.04);
+  color: #1a1d2e;
+}
+
+.planner-calendar .fc .fc-col-header-cell {
+  background-color: #f5f7fb;
+  font-weight: 500;
+  font-size: 13px;
+}
+
+.planner-calendar .fc .fc-daygrid-day-number {
+  color: #6b7280;
+  font-weight: 400;
+}
+
+.planner-calendar .fc .fc-day-today .fc-daygrid-day-number {
+  color: #5b5fef;
+  font-weight: 600;
+}
+
+.planner-calendar .fc .fc-event {
+  border-width: 2px;
+  border-left-width: 4px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.planner-calendar .fc .fc-toolbar-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+}
+
+.planner-calendar .fc .fc-day-wa-ph {
+  background-color: rgba(245, 158, 11, 0.12);
+}
+
+.planner-calendar .fc .fc-day-wa-ph .fc-daygrid-day-number {
+  color: #d97706;
+  font-weight: 600;
+}
+
+.planner-calendar .wa-ph-chip {
+  font-size: 0.62rem;
+  line-height: 1.15;
+  color: #b45309;
+  padding: 0 3px 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 100%;
+  pointer-events: none;
+}
+
+/* Gantt dark theme overrides */
+.planner-gantt ._2dZTy {
+  fill: #111827;
+}
+
+.planner-gantt ._3ZbQT {
+  fill: #1f2937;
+}
+
+.planner-gantt ._9w8d5,
+.planner-gantt text {
+  fill: #9ca3af;
+}
+
+.planner-gantt ._34SS0 {
+  stroke: #374151;
 }

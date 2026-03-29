@@ -1,0 +1,156 @@
+import { NextRequest, NextResponse } from "next/server";
+import { supabase } from "@/lib/supabase";
+
+export async function GET(req: NextRequest) {
+  const params = req.nextUrl.searchParams;
+  const crewId = params.get("crew_id");
+  const startDate = params.get("start_date");
+  const endDate = params.get("end_date");
+  const statusFilter = params.get("status");
+
+  let query = supabase
+    .from("planner_activities")
+    .select("*, crews(name)")
+    .order("start_date", { ascending: true })
+    .order("sort_order", { ascending: true });
+
+  if (crewId) {
+    query = query.eq("crew_id", crewId);
+  }
+
+  // Overlap filter: activity overlaps [startDate, endDate]
+  if (startDate && endDate) {
+    query = query.lte("start_date", endDate).gte("end_date", startDate);
+  } else if (startDate) {
+    query = query.gte("end_date", startDate);
+  } else if (endDate) {
+    query = query.lte("start_date", endDate);
+  }
+
+  if (statusFilter) {
+    const statuses = statusFilter.split(",").map((s) => s.trim());
+    query = query.in("status", statuses);
+  }
+
+  const { data, error } = await query;
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  // Flatten crew name from join
+  const activities = (data || []).map((row) => {
+    const { crews, ...rest } = row as Record<string, unknown>;
+    return {
+      ...rest,
+      crew_name: (crews as { name: string } | null)?.name || null,
+    };
+  });
+
+  return NextResponse.json(activities);
+}
+
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+
+  const { crew_id, name, start_date, end_date } = body;
+  if (!crew_id || !name || !start_date || !end_date) {
+    return NextResponse.json(
+      { error: "crew_id, name, start_date, and end_date are required" },
+      { status: 400 }
+    );
+  }
+
+  const row = {
+    crew_id,
+    name,
+    start_date,
+    end_date,
+    status: body.status || "planned",
+    drainer_section_id: body.drainer_section_id || null,
+    drainer_segment_id: body.drainer_segment_id || null,
+    notes: body.notes || null,
+    wbs_code: body.wbs_code || null,
+    is_baseline: body.is_baseline || false,
+    parent_activity_id: body.parent_activity_id || null,
+    sort_order: body.sort_order ?? 0,
+  };
+
+  const { data, error } = await supabase
+    .from("planner_activities")
+    .insert(row)
+    .select("*, crews(name)")
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const { crews, ...rest } = data as Record<string, unknown>;
+  return NextResponse.json({
+    ...rest,
+    crew_name: (crews as { name: string } | null)?.name || null,
+  });
+}
+
+export async function PUT(req: NextRequest) {
+  const body = await req.json();
+
+  const { id, ...updates } = body;
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  // Only allow updating specific fields
+  const allowed = [
+    "name", "start_date", "end_date", "status", "notes",
+    "wbs_code", "sort_order", "progress_percent",
+    "drainer_section_id", "drainer_segment_id",
+  ];
+  const filtered: Record<string, unknown> = {};
+  for (const key of allowed) {
+    if (key in updates) {
+      filtered[key] = updates[key];
+    }
+  }
+
+  if (Object.keys(filtered).length === 0) {
+    return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from("planner_activities")
+    .update(filtered)
+    .eq("id", id)
+    .select("*, crews(name)")
+    .single();
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  const { crews, ...rest } = data as Record<string, unknown>;
+  return NextResponse.json({
+    ...rest,
+    crew_name: (crews as { name: string } | null)?.name || null,
+  });
+}
+
+export async function DELETE(req: NextRequest) {
+  const id = req.nextUrl.searchParams.get("id");
+
+  if (!id) {
+    return NextResponse.json({ error: "id is required" }, { status: 400 });
+  }
+
+  const { error } = await supabase
+    .from("planner_activities")
+    .delete()
+    .eq("id", id);
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ deleted: true });
+}
