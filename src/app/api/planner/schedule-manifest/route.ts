@@ -26,13 +26,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const activities = (data || []).map((row) => {
-    const { crews, ...rest } = row as Record<string, unknown>;
-    return mapRowToPlannerActivity({
-      ...rest,
-      crew_name: (crews as { name: string } | null)?.name ?? null,
-    });
-  });
+  const activities = (data || [])
+    .map((row) => {
+      const { crews, ...rest } = row as Record<string, unknown>;
+      return mapRowToPlannerActivity({
+        ...rest,
+        crew_name: (crews as { name: string } | null)?.name ?? null,
+      });
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
 
   const slim = activities.map((a) => ({
     id: a.id,

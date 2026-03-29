@@ -20,7 +20,7 @@ export interface PlannerActivity {
   end_date: string;
   duration_days: number;
   status: ActivityStatus;
-  drainer_section_id: string | null;
+  drainer_section_id: string;
   drainer_segment_id: string | null;
   progress_percent: number;
   notes: string | null;
@@ -48,7 +48,7 @@ export interface CreateActivityPayload {
   start_date: string;
   end_date: string;
   status?: ActivityStatus;
-  drainer_section_id?: string | null;
+  drainer_section_id: string;
   drainer_segment_id?: string | null;
   notes?: string | null;
   wbs_code?: string | null;

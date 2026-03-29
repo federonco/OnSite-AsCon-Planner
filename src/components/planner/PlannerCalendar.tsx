@@ -7,8 +7,9 @@ import interactionPlugin from "@fullcalendar/interaction";
 import { PlannerActivity, UpdateActivityPayload } from "@/lib/planner-types";
 import { ACTIVITY_STATUS_COLORS } from "@/lib/planner-constants";
 import { getCrewColor } from "@/lib/planner-constants";
-import { addWeeks, format } from "date-fns";
-import { addDaysDateOnly, subDaysDateOnly, toDateOnly } from "@/lib/planner-date";
+import { format, startOfDay } from "date-fns";
+import { addDaysDateOnly, subDaysDateOnly } from "@/lib/planner-date";
+import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import { getWaPublicHolidayName } from "@/lib/wa-public-holidays";
 import type { DayCellMountArg } from "@fullcalendar/core";
 import type { EventInput, EventClickArg, EventDropArg, DateSelectArg } from "@fullcalendar/core";
@@ -37,42 +38,41 @@ export default function PlannerCalendar({
   onActivityMove,
   onDateSelect,
 }: PlannerCalendarProps) {
-  const validRange = useMemo(() => {
-    const todayStr = format(new Date(), "yyyy-MM-dd");
-    const horizonEndStr = format(addWeeks(new Date(), horizon), "yyyy-MM-dd");
-    let rangeStart = todayStr;
-    let rangeEndInclusive = horizonEndStr;
-    for (const act of activities) {
-      const s = toDateOnly(act.start_date);
-      const e = toDateOnly(act.end_date);
-      if (s < rangeStart) rangeStart = s;
-      if (e > rangeEndInclusive) rangeEndInclusive = e;
-    }
-    return { start: rangeStart, end: addDaysDateOnly(rangeEndInclusive, 1) };
-  }, [activities, horizon]);
+  const visibleRange = useMemo(
+    () => getPlannerHorizonVisibleRange(horizon, activities),
+    [activities, horizon]
+  );
+
+  const validRange = useMemo(
+    () => ({ start: visibleRange.start, end: visibleRange.endExclusive }),
+    [visibleRange]
+  );
 
   const events: EventInput[] = useMemo(() => {
-    return activities.map((act) => {
+    const out: EventInput[] = [];
+    for (const act of activities) {
       const crew = crewMap.get(act.crew_id);
-      const statusColor = ACTIVITY_STATUS_COLORS[act.status];
+      const statusColor = ACTIVITY_STATUS_COLORS[act.status] ?? ACTIVITY_STATUS_COLORS.planned;
       const crewColor = crew ? getCrewColor(crew.index) : "#6B7280";
-      const start = toDateOnly(act.start_date);
-      const end = toDateOnly(act.end_date);
 
-      return {
+      out.push({
         id: act.id,
         title: act.name,
-        start,
-        end: addDaysDateOnly(end, 1),
+        start: act.start_date,
+        end: addDaysDateOnly(act.end_date, 1),
         allDay: true,
         backgroundColor: statusColor,
         borderColor: crewColor,
         borderWidth: "3px",
         textColor: "#ffffff",
         extendedProps: { activity: act },
-      };
-    });
+      });
+    }
+    return out;
   }, [activities, crewMap]);
+
+  /** Intentionally stable: "today" at mount; calendar remounts via `key` when horizon/range changes. */
+  const initialDate = useMemo(() => startOfDay(new Date()), []);
 
   const handleEventClick = (info: EventClickArg) => {
     const activity = info.event.extendedProps.activity as PlannerActivity;
@@ -82,7 +82,6 @@ export default function PlannerCalendar({
   const handleEventDrop = (info: EventDropArg) => {
     const activity = info.event.extendedProps.activity as PlannerActivity;
     const newStart = info.event.startStr;
-    // Subtract 1 day from FullCalendar's exclusive end
     const newEnd = subDaysDateOnly(info.event.endStr || info.event.startStr, 1);
 
     onActivityMove({
@@ -128,9 +127,10 @@ export default function PlannerCalendar({
   return (
     <div className="planner-calendar rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card">
       <FullCalendar
-        key={events.map((e, i) => `${String(e.id ?? i)}-${String(e.start ?? "")}`).join("|")}
+        key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}`}
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="dayGridMonth"
+        initialDate={initialDate}
         events={events}
         editable={true}
         selectable={true}

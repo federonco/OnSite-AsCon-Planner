@@ -40,14 +40,16 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  // Flatten crew name from join
-  const activities = (data || []).map((row) => {
-    const { crews, ...rest } = row as Record<string, unknown>;
-    return mapRowToPlannerActivity({
-      ...rest,
-      crew_name: (crews as { name: string } | null)?.name ?? null,
-    });
-  });
+  // Flatten crew name from join; drop rows the mapper rejects (bad dates / ids)
+  const activities = (data || [])
+    .map((row) => {
+      const { crews, ...rest } = row as Record<string, unknown>;
+      return mapRowToPlannerActivity({
+        ...rest,
+        crew_name: (crews as { name: string } | null)?.name ?? null,
+      });
+    })
+    .filter((a): a is NonNullable<typeof a> => a !== null);
 
   return NextResponse.json(activities);
 }
@@ -57,11 +59,16 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   const { crew_id, name, start_date, end_date } = body;
+  const sectionId =
+    body.drainer_section_id != null ? String(body.drainer_section_id).trim() : "";
   if (!crew_id || !name || !start_date || !end_date) {
     return NextResponse.json(
       { error: "crew_id, name, start_date, and end_date are required" },
       { status: 400 }
     );
+  }
+  if (!sectionId) {
+    return NextResponse.json({ error: "drainer_section_id is required" }, { status: 400 });
   }
 
   const row = {
@@ -70,7 +77,7 @@ export async function POST(req: NextRequest) {
     start_date,
     end_date,
     status: body.status || "planned",
-    drainer_section_id: body.drainer_section_id || null,
+    drainer_section_id: sectionId,
     drainer_segment_id: body.drainer_segment_id || null,
     notes: body.notes || null,
     wbs_code: body.wbs_code || null,
@@ -90,12 +97,14 @@ export async function POST(req: NextRequest) {
   }
 
   const { crews, ...rest } = data as Record<string, unknown>;
-  return NextResponse.json(
-    mapRowToPlannerActivity({
-      ...rest,
-      crew_name: (crews as { name: string } | null)?.name ?? null,
-    })
-  );
+  const mapped = mapRowToPlannerActivity({
+    ...rest,
+    crew_name: (crews as { name: string } | null)?.name ?? null,
+  });
+  if (!mapped) {
+    return NextResponse.json({ error: "Invalid activity payload after save" }, { status: 500 });
+  }
+  return NextResponse.json(mapped);
 }
 
 export async function PUT(req: NextRequest) {
@@ -120,6 +129,17 @@ export async function PUT(req: NextRequest) {
     }
   }
 
+  if (
+    "drainer_section_id" in filtered &&
+    (filtered.drainer_section_id == null ||
+      String(filtered.drainer_section_id).trim() === "")
+  ) {
+    return NextResponse.json(
+      { error: "drainer_section_id cannot be empty when provided" },
+      { status: 400 }
+    );
+  }
+
   if (Object.keys(filtered).length === 0) {
     return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
   }
@@ -136,12 +156,14 @@ export async function PUT(req: NextRequest) {
   }
 
   const { crews, ...rest } = data as Record<string, unknown>;
-  return NextResponse.json(
-    mapRowToPlannerActivity({
-      ...rest,
-      crew_name: (crews as { name: string } | null)?.name ?? null,
-    })
-  );
+  const mapped = mapRowToPlannerActivity({
+    ...rest,
+    crew_name: (crews as { name: string } | null)?.name ?? null,
+  });
+  if (!mapped) {
+    return NextResponse.json({ error: "Invalid activity payload after update" }, { status: 500 });
+  }
+  return NextResponse.json(mapped);
 }
 
 export async function DELETE(req: NextRequest) {

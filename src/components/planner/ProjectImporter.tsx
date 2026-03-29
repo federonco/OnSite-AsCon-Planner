@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { ParsedProjectTask } from "@/lib/planner-types";
 
 interface Crew {
@@ -17,11 +17,54 @@ interface ProjectImporterProps {
 export default function ProjectImporter({ crews, onImported, onClose }: ProjectImporterProps) {
   const [file, setFile] = useState<File | null>(null);
   const [crewId, setCrewId] = useState(crews[0]?.id || "");
+  const [sectionId, setSectionId] = useState("");
+  const [sectionOptions, setSectionOptions] = useState<{ id: string; name: string }[]>([]);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
+  const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [mode, setMode] = useState<"editable" | "baseline">("editable");
   const [previewTasks, setPreviewTasks] = useState<ParsedProjectTask[] | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [result, setResult] = useState<{ imported: number; dependencies_imported: number } | null>(null);
+
+  useEffect(() => {
+    if (!crewId) {
+      setSectionOptions([]);
+      setSectionId("");
+      setSectionsError(null);
+      setSectionsLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setSectionsLoading(true);
+    setSectionsError(null);
+    (async () => {
+      try {
+        const res = await fetch(`/api/planner/sections?crew_id=${encodeURIComponent(crewId)}`);
+        const body = (await res.json()) as { sections?: { id: string; name: string }[]; error?: string };
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        if (!cancelled) {
+          setSectionOptions(body.sections ?? []);
+          setSectionId((prev) => {
+            const opts = body.sections ?? [];
+            if (prev && opts.some((s) => s.id === prev)) return prev;
+            return opts[0]?.id ?? "";
+          });
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setSectionsError(e instanceof Error ? e.message : "Could not load sections");
+          setSectionOptions([]);
+          setSectionId("");
+        }
+      } finally {
+        if (!cancelled) setSectionsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [crewId]);
 
   const handlePreview = async () => {
     if (!file) return;
@@ -50,7 +93,7 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
   };
 
   const handleImport = async () => {
-    if (!file || !crewId) return;
+    if (!file || !crewId || !sectionId.trim()) return;
     setLoading(true);
     setError(null);
 
@@ -58,6 +101,7 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
       const formData = new FormData();
       formData.append("file", file);
       formData.append("crew_id", crewId);
+      formData.append("drainer_section_id", sectionId.trim());
       formData.append("mode", mode);
 
       const res = await fetch("/api/planner/import", { method: "POST", body: formData });
@@ -129,7 +173,14 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Assign to Crew *</label>
-                  <select value={crewId} onChange={(e) => setCrewId(e.target.value)} className={fieldClass}>
+                  <select
+                    value={crewId}
+                    onChange={(e) => {
+                      setCrewId(e.target.value);
+                      setSectionId("");
+                    }}
+                    className={fieldClass}
+                  >
                     {crews.map((c) => (
                       <option key={c.id} value={c.id}>
                         {c.name}
@@ -148,6 +199,28 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
                     <option value="baseline">Baseline (Read-only)</option>
                   </select>
                 </div>
+              </div>
+
+              <div>
+                <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Section *</label>
+                <select
+                  value={sectionId}
+                  onChange={(e) => setSectionId(e.target.value)}
+                  className={fieldClass}
+                  disabled={sectionsLoading || !!sectionsError || sectionOptions.length === 0}
+                >
+                  <option value="">
+                    {sectionsLoading ? "Loading sections…" : sectionsError ? "— Error —" : "Select section…"}
+                  </option>
+                  {sectionOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                {sectionsError && (
+                  <p className="mt-1 text-dashboard-xs text-dashboard-status-danger">{sectionsError}</p>
+                )}
               </div>
 
               {error && (
@@ -214,7 +287,7 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
                   <button
                     type="button"
                     onClick={handleImport}
-                    disabled={!crewId || loading}
+                    disabled={!crewId || !sectionId.trim() || loading}
                     className="flex-1 rounded-dashboard-md bg-dashboard-status-success py-2.5 text-dashboard-sm font-medium text-white shadow-dashboard-card transition-[filter,opacity] hover:brightness-[1.05] disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     {loading ? "Importing..." : `Import ${previewTasks.length} Tasks`}

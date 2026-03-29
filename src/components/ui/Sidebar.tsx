@@ -16,9 +16,10 @@ const iconCalendar = (
     <path d="M3 10h18M8 3v4M16 3v4" strokeLinecap="round" />
   </svg>
 );
-const iconChart = (
+const iconDailyNotes = (
   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
-    <path d="M4 19V5M4 19h16M8 17V9m4 8V6m4 11v-5" strokeLinecap="round" />
+    <rect x="4" y="3" width="16" height="18" rx="2" />
+    <path d="M8 8h8M8 12h8M8 16h5" strokeLinecap="round" />
   </svg>
 );
 
@@ -63,7 +64,13 @@ export function Sidebar({ activeId = "schedule", collapsed }: SidebarProps) {
           active={activeId === "schedule"}
           collapsed={collapsed}
         />
-        <SidebarItem icon={iconChart} label="Reports" active={activeId === "reports"} collapsed={collapsed} />
+        <SidebarItem
+          href="/daily-notes"
+          icon={iconDailyNotes}
+          label="Daily notes"
+          active={activeId === "daily-notes"}
+          collapsed={collapsed}
+        />
       </nav>
     </aside>
   );

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
   PlannerActivity,
@@ -8,6 +8,11 @@ import {
   UpdateActivityPayload,
   HorizonWeeks,
 } from "@/lib/planner-types";
+import {
+  mapPlannerRowsFromApi,
+  mapRowToPlannerActivity,
+} from "@/lib/planner-activity-mapper";
+import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import HorizonSelector from "@/components/planner/HorizonSelector";
 import CrewFilter from "@/components/planner/CrewFilter";
 import SectionFilter from "@/components/planner/SectionFilter";
@@ -69,6 +74,12 @@ export default function PlannerPage() {
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsFetchError, setSectionsFetchError] = useState<string | null>(null);
   const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
+
+  const pipelineStatsRef = useRef({
+    rawCount: 0,
+    excludedInvalidDates: 0,
+    excludedOther: 0,
+  });
 
   const crewMap = useMemo(() => {
     const map = new Map<string, CrewInfo>();
@@ -184,8 +195,15 @@ export default function PlannerPage() {
         return;
       }
       if (Array.isArray(body)) {
-        setActivities(body as PlannerActivity[]);
+        const mapped = mapPlannerRowsFromApi(body);
+        pipelineStatsRef.current = {
+          rawCount: mapped.rawCount,
+          excludedInvalidDates: mapped.excludedInvalidDates,
+          excludedOther: mapped.excludedOther,
+        };
+        setActivities(mapped.activities);
       } else {
+        pipelineStatsRef.current = { rawCount: 0, excludedInvalidDates: 0, excludedOther: 0 };
         setActivities([]);
       }
     } catch (err) {
@@ -199,6 +217,20 @@ export default function PlannerPage() {
   useEffect(() => {
     fetchActivities();
   }, [fetchActivities]);
+
+  useEffect(() => {
+    if (process.env.NODE_ENV !== "development") return;
+    const p = pipelineStatsRef.current;
+    const visibleRange = getPlannerHorizonVisibleRange(horizon, activities);
+    console.log("[planner pipeline]", {
+      rawRows: p.rawCount,
+      mappedValidActivities: activities.length,
+      excludedInvalidDates: p.excludedInvalidDates,
+      excludedOther: p.excludedOther,
+      horizonWeeks: horizon,
+      visibleRange,
+    });
+  }, [activities, horizon]);
 
   useEffect(() => {
     if (typeof onlyEnabledCrewId === "string") {
@@ -219,7 +251,15 @@ export default function PlannerPage() {
       console.error("Save activity failed:", msg);
       throw new Error(msg);
     }
-    const saved = (await res.json()) as PlannerActivity;
+    const raw = (await res.json()) as unknown;
+    const saved =
+      raw && typeof raw === "object"
+        ? mapRowToPlannerActivity(raw as Record<string, unknown>)
+        : null;
+    if (!saved) {
+      await fetchActivities({ silent: true });
+      return;
+    }
     setActivities((prev) => {
       const rest = prev.filter((a) => a.id !== saved.id);
       return [...rest, saved].sort(
@@ -230,12 +270,17 @@ export default function PlannerPage() {
   };
 
   const handleDelete = async (id: string) => {
-    const res = await fetch(`/api/planner/activities?id=${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setActivities((prev) => prev.filter((a) => a.id !== id));
-      setShowActivityForm(false);
-      setSelectedActivity(null);
+    const res = await fetch(`/api/planner/activities?id=${encodeURIComponent(id)}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      const msg = (err as { error?: string }).error || res.statusText;
+      throw new Error(msg);
     }
+    setActivities((prev) => prev.filter((a) => a.id !== id));
+    setShowActivityForm(false);
+    setSelectedActivity(null);
   };
 
   const handleActivityMove = async (payload: UpdateActivityPayload) => {
@@ -245,8 +290,16 @@ export default function PlannerPage() {
       body: JSON.stringify(payload),
     });
     if (res.ok) {
-      const saved = (await res.json()) as PlannerActivity;
-      setActivities((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
+      const raw = (await res.json()) as unknown;
+      const saved =
+        raw && typeof raw === "object"
+          ? mapRowToPlannerActivity(raw as Record<string, unknown>)
+          : null;
+      if (saved) {
+        setActivities((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
+      } else {
+        void fetchActivities({ silent: true });
+      }
     }
   };
 
@@ -393,6 +446,7 @@ export default function PlannerPage() {
             <PlannerGantt
               activities={visibleActivities}
               crewMap={crewMap}
+              horizon={horizon}
               onActivityClick={handleActivityClick}
             />
           )}

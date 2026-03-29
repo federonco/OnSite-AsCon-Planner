@@ -7,6 +7,7 @@ export async function POST(req: NextRequest) {
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const crewId = formData.get("crew_id") as string | null;
+  const drainerSectionId = (formData.get("drainer_section_id") as string | null)?.trim() || "";
   const mode = formData.get("mode") as string | null; // "baseline" | "editable"
   const preview = formData.get("preview") as string | null;
 
@@ -35,10 +36,16 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  // Import mode: requires crew_id
+  // Import mode: requires crew_id and section (planner only loads activities with a section)
   if (!crewId) {
     return NextResponse.json(
       { error: "crew_id is required for import" },
+      { status: 400 }
+    );
+  }
+  if (!drainerSectionId) {
+    return NextResponse.json(
+      { error: "drainer_section_id is required for import" },
       { status: 400 }
     );
   }
@@ -77,6 +84,7 @@ export async function POST(req: NextRequest) {
     const batch = tasks.slice(i, i + BATCH_SIZE);
     const rows = batch.map((task, idx) => ({
       crew_id: crewId,
+      drainer_section_id: drainerSectionId,
       name: task.name,
       start_date: task.start_date,
       end_date: task.end_date,

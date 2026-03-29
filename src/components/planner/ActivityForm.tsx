@@ -56,6 +56,7 @@ export default function ActivityForm({
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   useEffect(() => {
     if (!crewId) {
@@ -120,9 +121,26 @@ export default function ActivityForm({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
+  const handleDeleteClick = async () => {
+    if (!activity || !onDelete) return;
+    setDeleting(true);
+    setSaveError(null);
+    try {
+      await onDelete(activity.id);
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Delete failed");
+    } finally {
+      setDeleting(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !crewId || !startDate || !endDate) return;
+    if (!drainerSectionId.trim()) {
+      setSaveError("Section is required.");
+      return;
+    }
 
     setSaving(true);
     setSaveError(null);
@@ -136,7 +154,7 @@ export default function ActivityForm({
           status,
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
-          drainer_section_id: drainerSectionId || null,
+          drainer_section_id: drainerSectionId.trim(),
         };
         await onSave(payload);
       } else {
@@ -148,7 +166,7 @@ export default function ActivityForm({
           status,
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
-          drainer_section_id: drainerSectionId || null,
+          drainer_section_id: drainerSectionId.trim(),
         };
         await onSave(payload);
       }
@@ -228,17 +246,20 @@ export default function ActivityForm({
             </div>
           </div>
 
-          {(sectionsLoading || sectionsError || sectionOptions.length > 0) && (
+          {crewId && (
             <div>
-              <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Section</label>
+              <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">
+                Section *
+              </label>
               <select
                 value={drainerSectionId}
                 onChange={(e) => setDrainerSectionId(e.target.value)}
                 className={inputClass}
+                required
                 disabled={sectionsLoading || !!sectionsError}
               >
                 <option value="">
-                  {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "— None —"}
+                  {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "Select section…"}
                 </option>
                 {sectionOptions.map((s) => (
                   <option key={s.id} value={s.id}>
@@ -248,6 +269,11 @@ export default function ActivityForm({
               </select>
               {sectionsError && (
                 <p className="mt-1 text-dashboard-xs text-dashboard-status-danger">{sectionsError}</p>
+              )}
+              {!sectionsLoading && !sectionsError && sectionOptions.length === 0 && (
+                <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">
+                  No sections for this crew. Add a section in the main app before creating activities.
+                </p>
               )}
             </div>
           )}
@@ -320,7 +346,14 @@ export default function ActivityForm({
           <div className="flex gap-3 pt-2">
             <button
               type="submit"
-              disabled={saving || !name.trim() || !startDate || !endDate}
+              disabled={
+                saving ||
+                deleting ||
+                !name.trim() ||
+                !startDate ||
+                !endDate ||
+                !drainerSectionId.trim()
+              }
               className="flex-1 rounded-dashboard-md bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] py-2.5 text-dashboard-sm font-medium text-white shadow-dashboard-card transition-[filter,opacity] hover:brightness-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : isEditing ? "Update" : "Create"}
@@ -328,10 +361,11 @@ export default function ActivityForm({
             {isEditing && onDelete && (
               <button
                 type="button"
-                onClick={() => onDelete(activity!.id)}
-                className="rounded-dashboard-md bg-dashboard-status-danger/10 px-4 py-2.5 text-dashboard-sm font-medium text-dashboard-status-danger transition-colors hover:bg-dashboard-status-danger/15"
+                disabled={saving || deleting}
+                onClick={() => void handleDeleteClick()}
+                className="rounded-dashboard-md bg-dashboard-status-danger/10 px-4 py-2.5 text-dashboard-sm font-medium text-dashboard-status-danger transition-colors hover:bg-dashboard-status-danger/15 disabled:cursor-not-allowed disabled:opacity-50"
               >
-                Delete
+                {deleting ? "Deleting…" : "Delete"}
               </button>
             )}
             <button
