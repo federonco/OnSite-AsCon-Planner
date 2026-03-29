@@ -1,5 +1,11 @@
 -- OnSite-P (Planner) Migration
 -- Tables for construction planning: activities and dependencies
+--
+-- RLS below calls get_admin_crew_ids() — that function must exist in the shared
+-- OnSite Supabase (it may be implemented on top of user_app_roles / has_role;
+-- do not duplicate role logic here). If your project never had it, apply the
+-- ecosystem migration that defines it before these policies, or adjust policies
+-- with your DBA.
 
 -- ============================================================
 -- 1. planner_activities

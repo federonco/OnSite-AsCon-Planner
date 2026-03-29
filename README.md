@@ -1,5 +1,9 @@
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
+## OnSite Ascon Planner
+
+Part of the OnSite ecosystem: pipeline tracker (`/tracker`), construction planner (`/planner`), daily notes. **Schema, RLS, and shared Supabase** are documented in [CLAUDE.md](./CLAUDE.md). Crew-scoped permissions in the shared database use the current app-role model (`user_app_roles` / `has_role` where applicable); SQL files in this repo reference `get_admin_crew_ids()` as provided by that project—see migration comments before applying policies.
+
 ## Getting Started
 
 First, run the development server:

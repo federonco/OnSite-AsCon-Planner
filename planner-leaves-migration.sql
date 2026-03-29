@@ -1,5 +1,6 @@
 -- People leaves + QR tokens (OnSite Planner)
 -- Applied on Supabase as migration planner_people_leaves_and_qr_tokens (+ RLS fixes).
+-- No get_admin_crew_ids() in these policies; API uses service role for writes.
 
 CREATE TABLE IF NOT EXISTS planner_people_leaves (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

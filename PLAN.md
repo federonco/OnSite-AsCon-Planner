@@ -101,7 +101,7 @@ regions
         │     ├── drainer_pipe_records (section_id)  ← OnSite-D
         │     ├── alignment_segments (section_id)    ← Pipeline Tracker
         │     └── alignment_checkpoints (section_id) ← Pipeline Tracker
-        └── crew_admins (auth + RLS)
+        └── user_app_roles / permisos por app (modelo compartido; RLS vía get_admin_crew_ids u equivalente)
 
 alignment_progress (segment_id → alignment_segments) ← Pipeline Tracker
 psp_records (section_id → psp_sections)              ← OnSite-PSP

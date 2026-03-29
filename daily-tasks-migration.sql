@@ -1,4 +1,5 @@
 -- Daily Notes — task list with rollover (apply in Supabase SQL editor)
+-- No dependency on get_admin_crew_ids(): open RLS below is intentional for this table.
 
 CREATE TABLE IF NOT EXISTS daily_tasks (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),

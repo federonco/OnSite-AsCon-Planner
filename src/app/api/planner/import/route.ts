@@ -163,10 +163,17 @@ export async function POST(req: NextRequest) {
         .select("id");
 
       if (error) {
-        console.error("Dependency insert error:", error.message);
-      } else {
-        depsInserted += data?.length || 0;
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Dependency insert failed: ${error.message}`,
+            imported: insertedCount,
+            dependencies_imported: depsInserted,
+          },
+          { status: 500 }
+        );
       }
+      depsInserted += data?.length || 0;
     }
   }
 

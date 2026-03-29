@@ -23,14 +23,14 @@ regions
   └── crews (region_id → regions)
         ├── drainer_sections (crew_id → crews)  ← THIS IS OUR "SECTIONS"
         │     └── drainer_pipe_records (section_id → drainer_sections)
-        └── crew_admins (auth + RLS)
+        └── user_app_roles (+ RPC has_role where used) — shared auth model
 ```
 
 ### Key Conventions
 - `crew_id` is always uuid FK → `crews`, NEVER plain text
 - `start_chainage` / `end_chainage` are type `numeric`
 - `created_at` is type `timestamptz`
-- RLS uses `get_admin_crew_ids()` function to resolve user permissions
+- RLS in this repo’s SQL migrations uses `get_admin_crew_ids()` (shared function; implementation may read `user_app_roles` / `has_role` — see main Supabase project, not duplicated here)
 - Constants: `PIPE_LENGTH_M = 12.2`, `TARGET_PIPES_PER_DAY = 2.5`
 
 ## New Tables for Pipeline Tracker

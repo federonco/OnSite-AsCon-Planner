@@ -4,6 +4,10 @@
 -- ============================================================
 -- Compatible with existing OnSite schema:
 --   regions → crews → drainer_sections → drainer_pipe_records
+--
+-- RLS policies use get_admin_crew_ids() from the shared DB (often backed by
+-- user_app_roles / has_role). Ensure that function exists before applying
+-- policies; do not redefine app-role logic in this file.
 -- ============================================================
 
 -- 1. ALIGNMENT SEGMENTS
