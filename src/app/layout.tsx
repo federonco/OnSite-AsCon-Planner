@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   title: "OnSite Pipeline Tracker",
   description: "DN1600 MSCL Aqueduct — 27km Pipeline Tracking System",
   icons: {
-    icon: [{ url: "/onsite-icon.svg", type: "image/svg+xml" }],
+    icon: [{ url: "/X.png", type: "image/png" }],
   },
 };
 
