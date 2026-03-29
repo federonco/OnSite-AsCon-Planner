@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
 /** List drainer_sections for a crew (server-side; avoids client RLS gaps). */
 export async function GET(req: NextRequest) {
   const crewId = req.nextUrl.searchParams.get("crew_id");

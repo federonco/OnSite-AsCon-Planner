@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parseProjectXml } from "@/lib/project-xml-parser";
 
+export const dynamic = "force-dynamic";
+
 /** Inserts use the service role client (see getSupabaseAdmin); RLS errors mean the server env key is wrong. */
 export async function POST(req: NextRequest) {
   const supabase = getSupabaseAdmin();

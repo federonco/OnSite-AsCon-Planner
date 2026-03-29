@@ -58,22 +58,6 @@ export function SettingsDropdown({
             className="w-full rounded-dashboard-sm px-2 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
             onClick={() => setOpen(false)}
           >
-            Notification preferences
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full rounded-dashboard-sm px-2 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
-            onClick={() => setOpen(false)}
-          >
-            Team access
-          </button>
-          <button
-            type="button"
-            role="menuitem"
-            className="w-full rounded-dashboard-sm px-2 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
-            onClick={() => setOpen(false)}
-          >
             Export calendar
           </button>
           <a

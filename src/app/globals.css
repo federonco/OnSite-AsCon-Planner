@@ -100,10 +100,29 @@ body {
   color: #ffffff;
 }
 
+.planner-calendar .fc .fc-scrollgrid-sync-table {
+  table-layout: fixed;
+  width: 100%;
+}
+
 .planner-calendar .fc .fc-col-header-cell {
   background-color: #f5f7fb;
   font-weight: 500;
   font-size: 13px;
+  width: 14.2857%;
+}
+
+.planner-calendar .fc .fc-daygrid-body .fc-daygrid-day {
+  width: 14.2857%;
+}
+
+.planner-calendar .fc .fc-daygrid-day-frame {
+  min-height: 140px;
+}
+
+.planner-calendar .fc .fc-day-sat,
+.planner-calendar .fc .fc-day-sun {
+  background-color: rgba(249, 250, 251, 0.92);
 }
 
 .planner-calendar .fc .fc-daygrid-day-number {
@@ -111,14 +130,14 @@ body {
   font-weight: 400;
 }
 
-/* Week view: taller cells, wider columns (sin dayMinWidth → no ScrollGrid plugin), eventos más legibles */
+/* Week view: same cell geometry as horizon (fixed table + shared min-heights above) */
 .planner-calendar .fc-dayGridWeek-view .fc-daygrid-day {
-  min-height: 220px;
-  min-width: 140px;
+  min-height: 0;
+  min-width: 0;
 }
 
 .planner-calendar .fc-dayGridWeek-view .fc-daygrid-day-frame {
-  min-height: 200px;
+  min-height: 140px;
 }
 
 .planner-calendar .fc-dayGridWeek-view .fc-daygrid-day-number {

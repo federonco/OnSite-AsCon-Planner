@@ -511,11 +511,6 @@ export default function PlannerPage() {
                 Selected: {ganttSelected.name}
               </span>
             )}
-            <span>{visibleActivities.length} activities</span>
-            <span>{visibleActivities.filter((a) => a.status === "in_progress").length} in progress</span>
-            <span>{visibleActivities.filter((a) => a.status === "done").length} done</span>
-            <span>{visibleActivities.filter((a) => a.status === "blocked").length} blocked</span>
-            <span>{visibleLeaves.length} on leave</span>
             <span className="ml-auto text-dashboard-xs text-dashboard-text-muted">
               Press <kbd className="rounded-dashboard-sm bg-dashboard-bg px-1.5 py-0.5 font-mono text-dashboard-text-secondary">N</kbd>{" "}
               for new activity

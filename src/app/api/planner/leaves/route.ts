@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { mapRowToPlannerPeopleLeave } from "@/lib/planner-leave-mapper";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
 export async function GET(req: NextRequest) {
   const supabase = getSupabaseAdmin();
   const crewId = req.nextUrl.searchParams.get("crew_id");

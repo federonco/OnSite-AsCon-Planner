@@ -4,6 +4,8 @@ import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { isValidDateOnlyString, toDateOnly } from "@/lib/planner-date";
 import { calendarSpanInclusiveDays } from "@/lib/planner-date";
 
+export const dynamic = "force-dynamic";
+
 const MAX_LEAVE_SPAN_DAYS = 120;
 
 /** Validate QR token before showing the public form (no secrets returned). */

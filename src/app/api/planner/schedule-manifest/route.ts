@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { mapRowToPlannerActivity } from "@/lib/planner-activity-mapper";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
+export const dynamic = "force-dynamic";
+
 /**
  * Stable JSON snapshot of activities for external schedulers (MS Project adapters, BIM extensions, etc.).
  * Each row uses `id` (UUID) as the canonical external key.

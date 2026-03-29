@@ -28,7 +28,7 @@ export function SiteFooter({
       )}
     >
       <div className="space-y-1">
-        <div>OnSite AsCon Planner — DN1600 MSCL Aqueduct</div>
+        <div>OnSite-AsCon-Planner</div>
         <div>
           Created by{" "}
           <a

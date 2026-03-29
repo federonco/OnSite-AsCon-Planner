@@ -204,7 +204,7 @@ export default function PlannerCalendar({
         selectMirror={true}
         dayMaxEvents={4}
         views={calendarViews}
-        weekends={false}
+        weekends={true}
         validRange={validRange}
         dayCellClassNames={dayCellClassNames}
         dayCellDidMount={dayCellDidMount}
@@ -221,8 +221,8 @@ export default function PlannerCalendar({
         eventDisplay="block"
       />
       <p className="mt-3 text-dashboard-xs text-dashboard-text-muted">
-        Purple blocks are people leave (read-only). WA public holidays are highlighted and do not count
-        as working days in the summary below.
+        Purple blocks are people leave (read-only). Weekends (Sat–Sun) are shown. WA public holidays are
+        highlighted and do not count as working days in the summary below.
       </p>
     </div>
   );
