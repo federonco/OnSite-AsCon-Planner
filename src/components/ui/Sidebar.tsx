@@ -94,7 +94,7 @@ export function Sidebar({ activeId = "schedule", collapsed: collapsedProp, onCol
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col bg-dashboard-sidebar py-6 transition-[width] duration-200 ease-dashboard",
+        "flex h-full shrink-0 flex-col bg-dashboard-sidebar py-6 text-dashboard-sidebar-text transition-[width] duration-200 ease-dashboard",
         collapsed ? "w-sidebar-collapsed px-2" : "w-sidebar px-3"
       )}
       aria-label="Main navigation"

@@ -3,9 +3,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { format } from "date-fns";
 import { Gantt, Task, ViewMode } from "gantt-task-react";
-import { PlannerActivity, UpdateActivityPayload } from "@/lib/planner-types";
+import { PlannerActivity, PlannerPeopleLeave, UpdateActivityPayload } from "@/lib/planner-types";
 import { calendarSpanInclusiveDays, parseDateOnlyLocal } from "@/lib/planner-date";
-import { ACTIVITY_STATUS_COLORS, getCrewColor } from "@/lib/planner-constants";
+import {
+  ACTIVITY_STATUS_COLORS,
+  getCrewColor,
+  PEOPLE_LEAVE_BAR_COLOR,
+  PEOPLE_LEAVE_BORDER_COLOR,
+} from "@/lib/planner-constants";
 import { cn } from "@/lib/cn";
 
 interface CrewInfo {
@@ -26,6 +31,18 @@ interface PlannerGanttProps {
   /** When set, enables drag/resize/progress on bars; return false to revert UI. */
   onActivityMove?: (payload: UpdateActivityPayload) => Promise<boolean>;
   onGanttSelect?: (activity: PlannerActivity | null) => void;
+  /** People leave periods (same crew grouping as activities). */
+  peopleLeaves?: PlannerPeopleLeave[];
+}
+
+const LEAVE_TASK_PREFIX = "leave-";
+
+function isLeaveTaskId(taskId: string): boolean {
+  return taskId.startsWith(LEAVE_TASK_PREFIX);
+}
+
+function leaveRowId(leaveId: string): string {
+  return `${LEAVE_TASK_PREFIX}${leaveId}`;
 }
 
 /** Matches gantt-task-react@0.3.9 dist/index.css (global). */
@@ -96,7 +113,7 @@ function PlannerTaskListTable({
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="truncate">{t.name}</div>
-                  {t.type === "task" && (
+                  {t.type === "task" && !isLeaveTaskId(String(t.id)) && (
                     <div className="text-[11px] font-medium tabular-nums text-dashboard-text-muted">
                       {Math.round(t.progress)}% complete
                     </div>
@@ -124,6 +141,7 @@ export default function PlannerGantt({
   onActivityClick,
   onActivityMove,
   onGanttSelect,
+  peopleLeaves = [],
 }: PlannerGanttProps) {
   const [crewCollapsed, setCrewCollapsed] = useState<Record<string, boolean>>({});
 
@@ -137,7 +155,15 @@ export default function PlannerGantt({
       rows.push({ act, ...parsed });
     }
 
-    if (rows.length === 0) return [];
+    const crewIds = new Set<string>();
+    for (const row of rows) {
+      crewIds.add(row.act.crew_id || "unknown");
+    }
+    for (const lv of peopleLeaves) {
+      if (lv.crew_id) crewIds.add(lv.crew_id);
+    }
+
+    if (crewIds.size === 0) return [];
 
     const crewGroups = new Map<string, Row[]>();
     for (const row of rows) {
@@ -147,18 +173,47 @@ export default function PlannerGantt({
       crewGroups.set(crewId, g);
     }
 
+    const leavesByCrew = new Map<string, PlannerPeopleLeave[]>();
+    for (const lv of peopleLeaves) {
+      const g = leavesByCrew.get(lv.crew_id) || [];
+      g.push(lv);
+      leavesByCrew.set(lv.crew_id, g);
+    }
+
+    const sortedCrewIds = Array.from(crewIds).sort((a, b) => {
+      const na = crewMap.get(a)?.name ?? a;
+      const nb = crewMap.get(b)?.name ?? b;
+      return na.localeCompare(nb);
+    });
+
     const result: Task[] = [];
 
-    Array.from(crewGroups.entries()).forEach(([crewId, groupRows]) => {
+    for (const crewId of sortedCrewIds) {
+      const groupRows = crewGroups.get(crewId) ?? [];
+      const crewLeaveList = leavesByCrew.get(crewId) ?? [];
+      if (groupRows.length === 0 && crewLeaveList.length === 0) continue;
+
+      const dateCandidates: Date[] = [];
+      for (const r of groupRows) {
+        dateCandidates.push(r.start, r.end);
+      }
+      for (const lv of crewLeaveList) {
+        const s = parseDateOnlyLocal(lv.start_date);
+        const eDay = parseDateOnlyLocal(lv.end_date);
+        if (!s || !eDay) continue;
+        const e = new Date(eDay);
+        e.setHours(23, 59, 59, 999);
+        dateCandidates.push(s, e);
+      }
+
+      if (dateCandidates.length === 0) continue;
+
+      const crewStart = dateCandidates.reduce((min, d) => (d < min ? d : min), dateCandidates[0]);
+      const crewEnd = dateCandidates.reduce((max, d) => (d > max ? d : max), dateCandidates[0]);
+
       const crew = crewMap.get(crewId);
       const crewName = crew?.name || "Unknown Crew";
       const crewColor = crew ? getCrewColor(crew.index) : "#6B7280";
-
-      const crewStart = groupRows.reduce(
-        (min, r) => (r.start < min ? r.start : min),
-        groupRows[0].start
-      );
-      const crewEnd = groupRows.reduce((max, r) => (r.end > max ? r.end : max), groupRows[0].end);
 
       const projectStart = new Date(crewStart);
       const projectEnd = new Date(crewEnd);
@@ -170,7 +225,7 @@ export default function PlannerGantt({
             crewEnd,
           });
         }
-        return;
+        continue;
       }
 
       result.push({
@@ -209,10 +264,35 @@ export default function PlannerGantt({
           },
         });
       }
-    });
+
+      for (const lv of crewLeaveList) {
+        const s = parseDateOnlyLocal(lv.start_date);
+        const eDay = parseDateOnlyLocal(lv.end_date);
+        if (!s || !eDay) continue;
+        const taskEnd = new Date(eDay);
+        taskEnd.setHours(23, 59, 59, 999);
+        const taskStart = new Date(s);
+        const label = lv.person_name?.trim() ? `Leave — ${lv.person_name.trim()}` : "Leave";
+        result.push({
+          id: leaveRowId(lv.id),
+          name: label,
+          start: taskStart,
+          end: taskEnd,
+          progress: 0,
+          type: "task",
+          project: `crew-${crewId}`,
+          styles: {
+            backgroundColor: PEOPLE_LEAVE_BAR_COLOR,
+            progressColor: PEOPLE_LEAVE_BORDER_COLOR,
+            progressSelectedColor: adjustColor(PEOPLE_LEAVE_BORDER_COLOR, -20),
+            backgroundSelectedColor: adjustColor(PEOPLE_LEAVE_BAR_COLOR, -15),
+          },
+        });
+      }
+    }
 
     return result;
-  }, [activities, crewCollapsed, crewMap]);
+  }, [activities, crewCollapsed, crewMap, peopleLeaves]);
 
   const tasks = useMemo(() => filterTasksForGantt(tasksBuilt), [tasksBuilt]);
 
@@ -237,6 +317,32 @@ export default function PlannerGantt({
               <p className="font-semibold">{task.name}</p>
               <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">
                 {formatTooltipDay(task.start)} – {formatTooltipDay(task.end)}
+              </p>
+            </div>
+          );
+        }
+        const tid = String(task.id);
+        if (isLeaveTaskId(tid)) {
+          const leaveId = tid.slice(LEAVE_TASK_PREFIX.length);
+          const leave = peopleLeaves.find((l) => l.id === leaveId);
+          const crewName = leave ? (crewMap.get(leave.crew_id)?.name ?? "—") : "—";
+          const dur = leave
+            ? calendarSpanInclusiveDays(leave.start_date, leave.end_date)
+            : 0;
+          return (
+            <div
+              className="max-w-xs rounded-dashboard-md border border-dashboard-border bg-dashboard-surface p-3 text-dashboard-sm text-dashboard-text-primary shadow-dashboard-card"
+              style={s}
+            >
+              <p className="font-semibold">
+                {leave?.person_name?.trim() ? `Leave — ${leave.person_name.trim()}` : "People leave"}
+              </p>
+              <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">Crew: {crewName}</p>
+              <p className="mt-1 text-dashboard-xs">
+                {formatTooltipDay(task.start)} – {formatTooltipDay(task.end)}
+              </p>
+              <p className="text-dashboard-xs text-dashboard-text-muted">
+                {dur} day{dur === 1 ? "" : "s"}
               </p>
             </div>
           );
@@ -271,12 +377,13 @@ export default function PlannerGantt({
           </div>
         );
       },
-    [activities, crewMap]
+    [activities, crewMap, peopleLeaves]
   );
 
   const openActivity = useCallback(
     (task: Task) => {
       if (task.type === "project") return;
+      if (isLeaveTaskId(String(task.id))) return;
       const activity = activities.find((a) => a.id === task.id);
       if (activity) onActivityClick(activity);
     },
@@ -292,6 +399,7 @@ export default function PlannerGantt({
   const handleDateChange = useCallback(
     async (task: Task): Promise<boolean> => {
       if (!onActivityMove || task.type === "project") return false;
+      if (isLeaveTaskId(String(task.id))) return false;
       const payload: UpdateActivityPayload = {
         id: task.id,
         start_date: format(task.start, "yyyy-MM-dd"),
@@ -305,6 +413,7 @@ export default function PlannerGantt({
   const handleProgressChange = useCallback(
     async (task: Task): Promise<boolean> => {
       if (!onActivityMove || task.type === "project") return false;
+      if (isLeaveTaskId(String(task.id))) return false;
       return onActivityMove({
         id: task.id,
         progress_percent: Math.min(100, Math.max(0, Math.round(task.progress))),
@@ -317,7 +426,7 @@ export default function PlannerGantt({
     (task: Task, isSelected: boolean) => {
       if (!onGanttSelect) return;
       if (isSelected) {
-        if (task.type === "project") {
+        if (task.type === "project" || isLeaveTaskId(String(task.id))) {
           onGanttSelect(null);
           return;
         }
@@ -418,6 +527,14 @@ export default function PlannerGantt({
             aria-hidden
           />
           Green — Done
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2.5 w-4 shrink-0 rounded-sm border border-dashboard-border/60"
+            style={{ backgroundColor: PEOPLE_LEAVE_BAR_COLOR }}
+            aria-hidden
+          />
+          Purple — People leave
         </span>
       </div>
       <div ref={chartMountRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">

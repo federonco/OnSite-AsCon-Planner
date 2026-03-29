@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import dynamic from "next/dynamic";
 import {
   PlannerActivity,
+  PlannerPeopleLeave,
   CreateActivityPayload,
   UpdateActivityPayload,
   HorizonWeeks,
@@ -12,6 +13,7 @@ import {
   mapPlannerRowsFromApi,
   mapRowToPlannerActivity,
 } from "@/lib/planner-activity-mapper";
+import { mapRowToPlannerPeopleLeave } from "@/lib/planner-leave-mapper";
 import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import HorizonSelector from "@/components/planner/HorizonSelector";
 import CrewFilter from "@/components/planner/CrewFilter";
@@ -26,6 +28,7 @@ import { SearchInput } from "@/components/ui/SearchInput";
 import { SettingsDropdown } from "@/components/ui/SettingsDropdown";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopHeader } from "@/components/ui/TopHeader";
+import PeopleLeaveQrDialog from "@/components/planner/PeopleLeaveQrDialog";
 
 const PlannerCalendar = dynamic(
   () => import("@/components/planner/PlannerCalendar"),
@@ -61,6 +64,7 @@ export default function PlannerPage() {
   const [crewFilter, setCrewFilter] = useState<string | null>(null);
 
   const [activities, setActivities] = useState<PlannerActivity[]>([]);
+  const [peopleLeaves, setPeopleLeaves] = useState<PlannerPeopleLeave[]>([]);
   const [crews, setCrews] = useState<Crew[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -75,6 +79,7 @@ export default function PlannerPage() {
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsFetchError, setSectionsFetchError] = useState<string | null>(null);
   const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
+  const [showLeaveQr, setShowLeaveQr] = useState(false);
 
   const pipelineStatsRef = useRef({
     rawCount: 0,
@@ -161,6 +166,16 @@ export default function PlannerPage() {
     return activities.filter((a) => a.drainer_section_id === sectionFilter);
   }, [activities, sectionFilter]);
 
+  const visibleLeaves = useMemo(() => {
+    if (!sectionFilter || !crewIdForSections) return peopleLeaves;
+    return peopleLeaves.filter((l) => l.crew_id === crewIdForSections);
+  }, [crewIdForSections, peopleLeaves, sectionFilter]);
+
+  const crewNameForQr = useMemo(() => {
+    if (!crewIdForApi) return null;
+    return crews.find((c) => c.id === crewIdForApi)?.name ?? null;
+  }, [crewIdForApi, crews]);
+
   useEffect(() => {
     const fetchCrews = async () => {
       try {
@@ -215,9 +230,37 @@ export default function PlannerPage() {
     }
   }, [crewIdForApi]);
 
+  const fetchLeaves = useCallback(async () => {
+    try {
+      const params = new URLSearchParams();
+      if (crewIdForApi) params.set("crew_id", crewIdForApi);
+      const q = params.toString();
+      const res = await fetch(`/api/planner/leaves${q ? `?${q}` : ""}`);
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        setPeopleLeaves([]);
+        return;
+      }
+      if (!Array.isArray(body)) {
+        setPeopleLeaves([]);
+        return;
+      }
+      const mapped = body
+        .map((row) => mapRowToPlannerPeopleLeave(row as Record<string, unknown>))
+        .filter((l): l is PlannerPeopleLeave => l != null);
+      setPeopleLeaves(mapped);
+    } catch {
+      setPeopleLeaves([]);
+    }
+  }, [crewIdForApi]);
+
   useEffect(() => {
     fetchActivities();
   }, [fetchActivities]);
+
+  useEffect(() => {
+    void fetchLeaves();
+  }, [fetchLeaves]);
 
   useEffect(() => {
     if (process.env.NODE_ENV !== "development") return;
@@ -420,6 +463,8 @@ export default function PlannerPage() {
                       ? new URLSearchParams({ crew_id: crewIdForApi }).toString()
                       : undefined
                   }
+                  onPeopleLeaveQr={() => setShowLeaveQr(true)}
+                  peopleLeaveQrDisabled={!crewIdForApi}
                 />
               </>
             }
@@ -448,6 +493,7 @@ export default function PlannerPage() {
               onActivityClick={handleActivityClick}
               onActivityMove={handleActivityMove}
               onDateSelect={handleDateSelect}
+              peopleLeaves={visibleLeaves}
             />
           ) : (
             <PlannerGantt
@@ -455,6 +501,7 @@ export default function PlannerPage() {
               crewMap={crewMap}
               horizon={horizon}
               onActivityClick={handleActivityClick}
+              peopleLeaves={visibleLeaves}
             />
           )}
 
@@ -468,6 +515,7 @@ export default function PlannerPage() {
             <span>{visibleActivities.filter((a) => a.status === "in_progress").length} in progress</span>
             <span>{visibleActivities.filter((a) => a.status === "done").length} done</span>
             <span>{visibleActivities.filter((a) => a.status === "blocked").length} blocked</span>
+            <span>{visibleLeaves.length} on leave</span>
             <span className="ml-auto text-dashboard-xs text-dashboard-text-muted">
               Press <kbd className="rounded-dashboard-sm bg-dashboard-bg px-1.5 py-0.5 font-mono text-dashboard-text-secondary">N</kbd>{" "}
               for new activity
@@ -503,6 +551,13 @@ export default function PlannerPage() {
           onClose={() => setShowImporter(false)}
         />
       )}
+
+      <PeopleLeaveQrDialog
+        open={showLeaveQr}
+        onClose={() => setShowLeaveQr(false)}
+        crewId={crewIdForApi}
+        crewName={crewNameForQr}
+      />
     </>
   );
 }

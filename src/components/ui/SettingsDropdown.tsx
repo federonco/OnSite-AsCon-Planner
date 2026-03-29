@@ -16,9 +16,18 @@ export interface SettingsDropdownProps {
   className?: string;
   /** Optional query string for schedule manifest, e.g. `crew_id=<uuid>` */
   scheduleManifestQuery?: string;
+  /** Open people-leave QR dialog (planner). */
+  onPeopleLeaveQr?: () => void;
+  /** Disable leave QR when no crew is selected. */
+  peopleLeaveQrDisabled?: boolean;
 }
 
-export function SettingsDropdown({ className, scheduleManifestQuery }: SettingsDropdownProps) {
+export function SettingsDropdown({
+  className,
+  scheduleManifestQuery,
+  onPeopleLeaveQr,
+  peopleLeaveQrDisabled,
+}: SettingsDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -77,6 +86,20 @@ export function SettingsDropdown({ className, scheduleManifestQuery }: SettingsD
           >
             Schedule manifest (JSON)
           </a>
+          {onPeopleLeaveQr && (
+            <button
+              type="button"
+              role="menuitem"
+              disabled={peopleLeaveQrDisabled}
+              className="w-full rounded-dashboard-sm px-2 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => {
+                setOpen(false);
+                onPeopleLeaveQr();
+              }}
+            >
+              People leave QR…
+            </button>
+          )}
         </div>
       )}
     </div>

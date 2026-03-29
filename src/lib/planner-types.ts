@@ -41,6 +41,17 @@ export interface PlannerDependency {
   created_at: string;
 }
 
+/** Crew-scoped people leave (from QR form or future admin UI). */
+export interface PlannerPeopleLeave {
+  id: string;
+  crew_id: string;
+  start_date: string;
+  end_date: string;
+  duration_days: number;
+  person_name: string | null;
+  created_at: string;
+}
+
 /** Payload for creating an activity */
 export interface CreateActivityPayload {
   crew_id: string;

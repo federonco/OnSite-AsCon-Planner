@@ -16,11 +16,11 @@ export interface SidebarItemProps {
 
 const itemClassName = (active: boolean | undefined, collapsed?: boolean) =>
   cn(
-    "flex h-sidebar-item w-full items-center gap-3 rounded-dashboard-md px-3 text-dashboard-sm font-medium text-dashboard-sidebar-text transition-colors duration-dashboard-fast ease-dashboard",
+    "flex h-sidebar-item w-full items-center gap-3 rounded-dashboard-md px-3 text-dashboard-sm font-medium transition-colors duration-dashboard-fast ease-dashboard",
     collapsed && "justify-center gap-0 px-2",
     active
-      ? "bg-dashboard-sidebar-active"
-      : "bg-transparent hover:bg-dashboard-sidebar-item"
+      ? "bg-dashboard-sidebar-active text-white"
+      : "bg-transparent text-dashboard-sidebar-text hover:bg-dashboard-sidebar-item"
   );
 
 export function SidebarItem({ icon, label, active, onClick, collapsed, href }: SidebarItemProps) {

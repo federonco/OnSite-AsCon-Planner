@@ -1,4 +1,5 @@
 export { AppShell } from "./AppShell";
+export { SiteFooter } from "./SiteFooter";
 export { Avatar } from "./Avatar";
 export { CreateEventButton } from "./CreateEventButton";
 export { EventGroupSection } from "./EventGroupSection";

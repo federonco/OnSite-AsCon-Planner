@@ -22,10 +22,10 @@ const config: Config = {
             muted: "#9CA3AF",
           },
           sidebar: {
-            DEFAULT: "#0B1454",
-            item: "#1A2B8F",
-            active: "#2D3FD8",
-            text: "#FFFFFF",
+            DEFAULT: "#E5E7EB",
+            item: "#D1D5DB",
+            active: "#5B5FEF",
+            text: "#1A1D2E",
           },
           status: {
             success: "#22C55E",

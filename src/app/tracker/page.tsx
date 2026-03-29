@@ -11,6 +11,7 @@ import AddressSearch from "@/components/tracker/AddressSearch";
 import ShapefileLoader from "@/components/tracker/ShapefileLoader";
 import CheckpointCreator from "@/components/tracker/CheckpointCreator";
 import Link from "next/link";
+import { SiteFooter } from "@/components/ui/SiteFooter";
 
 // Hardcoded section ID for McLennan Dr - Sec 3
 const SECTION_ID = "95ed700f-e11c-45f8-8ada-d4b947d2d96e";
@@ -149,7 +150,7 @@ export default function TrackerPage() {
       </header>
 
       {/* Main content */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex min-h-0 flex-1 overflow-hidden">
         {/* Map area */}
         <div className="flex-1 relative">
           <PipelineMap
@@ -204,6 +205,8 @@ export default function TrackerPage() {
           />
         </aside>
       </div>
+
+      <SiteFooter variant="dark" />
     </div>
   );
 }

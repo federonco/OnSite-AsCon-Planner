@@ -4,9 +4,18 @@ import { useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { PlannerActivity, UpdateActivityPayload, type HorizonWeeks } from "@/lib/planner-types";
+import {
+  PlannerActivity,
+  PlannerPeopleLeave,
+  UpdateActivityPayload,
+  type HorizonWeeks,
+} from "@/lib/planner-types";
 import HorizonSelector from "@/components/planner/HorizonSelector";
-import { ACTIVITY_STATUS_COLORS } from "@/lib/planner-constants";
+import {
+  ACTIVITY_STATUS_COLORS,
+  PEOPLE_LEAVE_BAR_COLOR,
+  PEOPLE_LEAVE_BORDER_COLOR,
+} from "@/lib/planner-constants";
 import { getCrewColor } from "@/lib/planner-constants";
 import { format, startOfDay, startOfWeek } from "date-fns";
 import { addDaysDateOnly, subDaysDateOnly } from "@/lib/planner-date";
@@ -30,6 +39,7 @@ interface PlannerCalendarProps {
   onActivityClick: (activity: PlannerActivity) => void;
   onActivityMove: (payload: UpdateActivityPayload) => void | Promise<boolean>;
   onDateSelect: (startDate: string, endDate: string) => void;
+  peopleLeaves?: PlannerPeopleLeave[];
 }
 
 export default function PlannerCalendar({
@@ -40,6 +50,7 @@ export default function PlannerCalendar({
   onActivityClick,
   onActivityMove,
   onDateSelect,
+  peopleLeaves = [],
 }: PlannerCalendarProps) {
   const visibleRange = useMemo(
     () => getPlannerHorizonVisibleRange(horizon, activities),
@@ -89,8 +100,25 @@ export default function PlannerCalendar({
         extendedProps: { activity: act },
       });
     }
+    for (const lv of peopleLeaves) {
+      const title = lv.person_name?.trim() ? `Leave: ${lv.person_name.trim()}` : "Leave";
+      out.push({
+        id: `leave-${lv.id}`,
+        title,
+        start: lv.start_date,
+        end: addDaysDateOnly(lv.end_date, 1),
+        allDay: true,
+        editable: false,
+        backgroundColor: PEOPLE_LEAVE_BAR_COLOR,
+        borderColor: PEOPLE_LEAVE_BORDER_COLOR,
+        borderWidth: "3px",
+        textColor: "#ffffff",
+        classNames: ["fc-event-leave"],
+        extendedProps: { leave: lv },
+      });
+    }
     return out;
-  }, [activities, crewMap]);
+  }, [activities, crewMap, peopleLeaves]);
 
   /** Monday-start week containing today; remount via `key` picks fresh date when horizon/range changes. */
   const initialDate = useMemo(
@@ -99,11 +127,16 @@ export default function PlannerCalendar({
   );
 
   const handleEventClick = (info: EventClickArg) => {
+    if (info.event.extendedProps.leave) return;
     const activity = info.event.extendedProps.activity as PlannerActivity;
     onActivityClick(activity);
   };
 
   const handleEventDrop = (info: EventDropArg) => {
+    if (info.event.extendedProps.leave) {
+      info.revert();
+      return;
+    }
     const activity = info.event.extendedProps.activity as PlannerActivity;
     const newStart = info.event.startStr;
     const newEnd = subDaysDateOnly(info.event.endStr || info.event.startStr, 1);
@@ -116,6 +149,10 @@ export default function PlannerCalendar({
   };
 
   const handleEventResize = (info: EventResizeDoneArg) => {
+    if (info.event.extendedProps.leave) {
+      info.revert();
+      return;
+    }
     const activity = info.event.extendedProps.activity as PlannerActivity;
     const newEnd = subDaysDateOnly(info.event.endStr || info.event.startStr, 1);
 
@@ -184,7 +221,8 @@ export default function PlannerCalendar({
         eventDisplay="block"
       />
       <p className="mt-3 text-dashboard-xs text-dashboard-text-muted">
-        WA public holidays are highlighted and do not count as working days in the summary below.
+        Purple blocks are people leave (read-only). WA public holidays are highlighted and do not count
+        as working days in the summary below.
       </p>
     </div>
   );

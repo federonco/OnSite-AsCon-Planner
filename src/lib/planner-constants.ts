@@ -6,6 +6,10 @@ import { ActivityStatus } from "./planner-types";
  */
 export const PLANNER_CREW_ROLLOUT_NAME: string | null = "A";
 
+/** Calendar / Gantt styling for people leave bars (distinct from activity status). */
+export const PEOPLE_LEAVE_BAR_COLOR = "#7C3AED";
+export const PEOPLE_LEAVE_BORDER_COLOR = "#5B21B6";
+
 /** Color coding by activity status */
 export const ACTIVITY_STATUS_COLORS: Record<ActivityStatus, string> = {
   planned: "#3B8BD4",

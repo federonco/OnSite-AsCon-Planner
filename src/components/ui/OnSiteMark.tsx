@@ -1,23 +1,19 @@
+import Image from "next/image";
+import { cn } from "@/lib/cn";
+
 /**
- * Vector mark for sidebar / small branding (replaces invalid 70B fabicon.png).
+ * Sidebar mark: `public/X.png` (URL `/X.png`). Next.js does not serve `src/lib/public/*`.
  */
 export function OnSiteMark({ className }: { className?: string }) {
   return (
-    <svg
-      className={className}
-      viewBox="0 0 32 32"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
+    <Image
+      src="/X.png"
+      alt=""
+      width={32}
+      height={32}
+      className={cn("shrink-0 rounded-dashboard-md object-contain", className)}
       aria-hidden
-    >
-      <rect width="32" height="32" rx="8" fill="#2D3FD8" />
-      <circle cx="16" cy="16" r="6" stroke="#FFFFFF" strokeWidth="2.25" fill="none" />
-      <path
-        d="M16 12v8M12 16h8"
-        stroke="#FFFFFF"
-        strokeWidth="2.25"
-        strokeLinecap="round"
-      />
-    </svg>
+      priority
+    />
   );
 }
