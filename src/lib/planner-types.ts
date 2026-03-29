@@ -52,6 +52,15 @@ export interface PlannerPeopleLeave {
   created_at: string;
 }
 
+/**
+ * Subset of columns from Supabase `drainer_sections` exposed to the planner
+ * section filter and activity forms (`GET /api/planner/sections`).
+ */
+export interface DrainerSectionListItem {
+  id: string;
+  name: string;
+}
+
 /** Payload for creating an activity */
 export interface CreateActivityPayload {
   crew_id: string;

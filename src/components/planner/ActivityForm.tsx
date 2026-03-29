@@ -7,6 +7,7 @@ import {
   UpdateActivityPayload,
   ACTIVITY_STATUSES,
   ActivityStatus,
+  type DrainerSectionListItem,
 } from "@/lib/planner-types";
 
 const STATUS_PICKER_OPTIONS = ACTIVITY_STATUSES.filter((s) => s !== "blocked");
@@ -56,7 +57,7 @@ export default function ActivityForm({
   const [drainerSectionId, setDrainerSectionId] = useState(
     () => activity?.drainer_section_id ?? defaultSectionId ?? ""
   );
-  const [sectionOptions, setSectionOptions] = useState<{ id: string; name: string }[]>([]);
+  const [sectionOptions, setSectionOptions] = useState<DrainerSectionListItem[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -76,7 +77,7 @@ export default function ActivityForm({
     (async () => {
       try {
         const res = await fetch(`/api/planner/sections?crew_id=${encodeURIComponent(crewId)}`);
-        const body = (await res.json()) as { sections?: { id: string; name: string }[]; error?: string };
+        const body = (await res.json()) as { sections?: DrainerSectionListItem[]; error?: string };
         if (!res.ok) throw new Error(body.error || res.statusText);
         if (!cancelled) {
           setSectionOptions(body.sections ?? []);

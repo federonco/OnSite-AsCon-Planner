@@ -1,11 +1,10 @@
 "use client";
 
 import { cn } from "@/lib/cn";
+import type { DrainerSectionListItem } from "@/lib/planner-types";
 
-export interface SectionOption {
-  id: string;
-  name: string;
-}
+/** Options come from Supabase `drainer_sections` via `/api/planner/sections`. */
+export type SectionOption = DrainerSectionListItem;
 
 interface SectionFilterProps {
   sections: SectionOption[];

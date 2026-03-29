@@ -8,6 +8,7 @@ import {
   CreateActivityPayload,
   UpdateActivityPayload,
   HorizonWeeks,
+  type DrainerSectionListItem,
 } from "@/lib/planner-types";
 import {
   mapPlannerRowsFromApi,
@@ -75,7 +76,7 @@ export default function PlannerPage() {
   const [viewMode, setViewMode] = useState<"calendar" | "gantt">("calendar");
   const [ganttSelected, setGanttSelected] = useState<PlannerActivity | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
-  const [drainerSections, setDrainerSections] = useState<{ id: string; name: string }[]>([]);
+  const [drainerSections, setDrainerSections] = useState<DrainerSectionListItem[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsFetchError, setSectionsFetchError] = useState<string | null>(null);
   const [crewsFetchError, setCrewsFetchError] = useState<string | null>(null);
@@ -152,7 +153,7 @@ export default function PlannerPage() {
           `/api/planner/sections?crew_id=${encodeURIComponent(crewIdForSections)}`
         );
         const body = (await res.json()) as {
-          sections?: { id: string; name: string }[];
+          sections?: DrainerSectionListItem[];
           error?: string;
         };
         if (!res.ok) throw new Error(body.error || res.statusText);
@@ -521,6 +522,8 @@ export default function PlannerPage() {
               crewMap={crewMap}
               horizon={horizon}
               onActivityClick={handleActivityClick}
+              onActivityMove={handleActivityMove}
+              onGanttSelect={setGanttSelected}
               peopleLeaves={visibleLeaves}
             />
           )}

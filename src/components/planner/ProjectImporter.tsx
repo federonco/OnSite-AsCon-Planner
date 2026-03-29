@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { ParsedProjectTask } from "@/lib/planner-types";
+import { ParsedProjectTask, type DrainerSectionListItem } from "@/lib/planner-types";
 
 interface Crew {
   id: string;
@@ -18,7 +18,7 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
   const [file, setFile] = useState<File | null>(null);
   const [crewId, setCrewId] = useState(crews[0]?.id || "");
   const [sectionId, setSectionId] = useState("");
-  const [sectionOptions, setSectionOptions] = useState<{ id: string; name: string }[]>([]);
+  const [sectionOptions, setSectionOptions] = useState<DrainerSectionListItem[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
   const [mode, setMode] = useState<"editable" | "baseline">("editable");
@@ -41,7 +41,7 @@ export default function ProjectImporter({ crews, onImported, onClose }: ProjectI
     (async () => {
       try {
         const res = await fetch(`/api/planner/sections?crew_id=${encodeURIComponent(crewId)}`);
-        const body = (await res.json()) as { sections?: { id: string; name: string }[]; error?: string };
+        const body = (await res.json()) as { sections?: DrainerSectionListItem[]; error?: string };
         if (!res.ok) throw new Error(body.error || res.statusText);
         if (!cancelled) {
           setSectionOptions(body.sections ?? []);
