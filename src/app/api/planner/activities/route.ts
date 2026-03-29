@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { mapRowToPlannerActivity } from "@/lib/planner-activity-mapper";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const params = req.nextUrl.searchParams;
   const crewId = params.get("crew_id");
   const startDate = params.get("start_date");
@@ -41,16 +43,17 @@ export async function GET(req: NextRequest) {
   // Flatten crew name from join
   const activities = (data || []).map((row) => {
     const { crews, ...rest } = row as Record<string, unknown>;
-    return {
+    return mapRowToPlannerActivity({
       ...rest,
-      crew_name: (crews as { name: string } | null)?.name || null,
-    };
+      crew_name: (crews as { name: string } | null)?.name ?? null,
+    });
   });
 
   return NextResponse.json(activities);
 }
 
 export async function POST(req: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const body = await req.json();
 
   const { crew_id, name, start_date, end_date } = body;
@@ -87,13 +90,16 @@ export async function POST(req: NextRequest) {
   }
 
   const { crews, ...rest } = data as Record<string, unknown>;
-  return NextResponse.json({
-    ...rest,
-    crew_name: (crews as { name: string } | null)?.name || null,
-  });
+  return NextResponse.json(
+    mapRowToPlannerActivity({
+      ...rest,
+      crew_name: (crews as { name: string } | null)?.name ?? null,
+    })
+  );
 }
 
 export async function PUT(req: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const body = await req.json();
 
   const { id, ...updates } = body;
@@ -130,13 +136,16 @@ export async function PUT(req: NextRequest) {
   }
 
   const { crews, ...rest } = data as Record<string, unknown>;
-  return NextResponse.json({
-    ...rest,
-    crew_name: (crews as { name: string } | null)?.name || null,
-  });
+  return NextResponse.json(
+    mapRowToPlannerActivity({
+      ...rest,
+      crew_name: (crews as { name: string } | null)?.name ?? null,
+    })
+  );
 }
 
 export async function DELETE(req: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const id = req.nextUrl.searchParams.get("id");
 
   if (!id) {

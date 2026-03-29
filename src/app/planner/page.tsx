@@ -66,6 +66,9 @@ export default function PlannerPage() {
   const [viewMode, setViewMode] = useState<"calendar" | "gantt">("calendar");
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const [drainerSections, setDrainerSections] = useState<{ id: string; name: string }[]>([]);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
+  const [sectionsFetchError, setSectionsFetchError] = useState<string | null>(null);
+  const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
 
   const crewMap = useMemo(() => {
     const map = new Map<string, CrewInfo>();
@@ -109,18 +112,32 @@ export default function PlannerPage() {
   useEffect(() => {
     if (!crewIdForSections) {
       setDrainerSections([]);
+      setSectionsFetchError(null);
+      setSectionsLoading(false);
       return;
     }
     let cancelled = false;
+    setSectionsLoading(true);
+    setSectionsFetchError(null);
     (async () => {
-      const { getSupabase } = await import("@/lib/supabase");
-      const supabase = getSupabase();
-      const { data } = await supabase
-        .from("drainer_sections")
-        .select("id, name")
-        .eq("crew_id", crewIdForSections)
-        .order("name");
-      if (!cancelled) setDrainerSections(data || []);
+      try {
+        const res = await fetch(
+          `/api/planner/sections?crew_id=${encodeURIComponent(crewIdForSections)}`
+        );
+        const body = (await res.json()) as {
+          sections?: { id: string; name: string }[];
+          error?: string;
+        };
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        if (!cancelled) setDrainerSections(body.sections ?? []);
+      } catch (e) {
+        if (!cancelled) {
+          setSectionsFetchError(e instanceof Error ? e.message : "Failed to load sections");
+          setDrainerSections([]);
+        }
+      } finally {
+        if (!cancelled) setSectionsLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -148,16 +165,32 @@ export default function PlannerPage() {
 
   const fetchActivities = useCallback(async (opts?: { silent?: boolean }) => {
     if (!opts?.silent) setLoading(true);
+    setActivitiesFetchError(null);
     try {
       const params = new URLSearchParams();
       if (crewIdForApi) params.set("crew_id", crewIdForApi);
 
       const res = await fetch(`/api/planner/activities?${params}`);
-      if (res.ok) {
-        setActivities(await res.json());
+      const body: unknown = await res.json().catch(() => null);
+      if (!res.ok) {
+        const msg =
+          body &&
+          typeof body === "object" &&
+          "error" in body &&
+          typeof (body as { error: unknown }).error === "string"
+            ? (body as { error: string }).error
+            : res.statusText;
+        setActivitiesFetchError(msg);
+        return;
+      }
+      if (Array.isArray(body)) {
+        setActivities(body as PlannerActivity[]);
+      } else {
+        setActivities([]);
       }
     } catch (err) {
       console.error("Failed to fetch activities:", err);
+      setActivitiesFetchError(err instanceof Error ? err.message : "Network error");
     } finally {
       if (!opts?.silent) setLoading(false);
     }
@@ -301,6 +334,8 @@ export default function PlannerPage() {
                     value={sectionFilter}
                     onChange={setSectionFilter}
                     disabled={!crewIdForSections}
+                    loading={sectionsLoading}
+                    error={sectionsFetchError}
                   />
                 </div>
               </div>
@@ -315,13 +350,27 @@ export default function PlannerPage() {
                   Import XML
                 </button>
                 <CreateEventButton onClick={handleNewActivity}>+ Activity</CreateEventButton>
-                <SettingsDropdown />
+                <SettingsDropdown
+                  scheduleManifestQuery={
+                    crewIdForApi
+                      ? new URLSearchParams({ crew_id: crewIdForApi }).toString()
+                      : undefined
+                  }
+                />
               </>
             }
           />
         }
       >
         <div className="mx-auto max-w-[1600px] space-y-6">
+          {activitiesFetchError && (
+            <div
+              className="rounded-dashboard-lg border border-dashboard-status-danger/40 bg-dashboard-status-danger/10 px-4 py-3 text-dashboard-sm text-dashboard-status-danger"
+              role="alert"
+            >
+              Could not load activities: {activitiesFetchError}
+            </div>
+          )}
           <div>
             <h1 className="text-dashboard-xl font-semibold text-dashboard-text-primary">OnSite Planner</h1>
             <p className="mt-1 text-dashboard-sm font-normal text-dashboard-text-secondary">

@@ -12,7 +12,7 @@ export function TopHeader({ left, center, right, className }: TopHeaderProps) {
   return (
     <header
       className={cn(
-        "relative z-10 flex min-h-[72px] shrink-0 flex-wrap items-center justify-between gap-x-4 gap-y-3 border-b border-dashboard-border bg-dashboard-surface px-dashboard-xl py-3",
+        "relative z-10 flex min-h-[72px] shrink-0 items-center justify-between gap-4 border-b border-dashboard-border bg-dashboard-surface px-dashboard-xl py-3",
         className
       )}
     >

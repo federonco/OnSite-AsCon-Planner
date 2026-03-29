@@ -21,8 +21,9 @@ export default function CrewFilter({
   onChange,
   onlyEnabledCrewId = false,
 }: CrewFilterProps) {
-  const locked = onlyEnabledCrewId !== false;
-  const enabledId = typeof onlyEnabledCrewId === "string" ? onlyEnabledCrewId : null;
+  /** Lock only when a specific crew id is forced (not `null` = rollout name set but unresolved crew). */
+  const locked = typeof onlyEnabledCrewId === "string";
+  const enabledId = locked ? onlyEnabledCrewId : null;
   const allActive = !locked && value === null;
 
   return (

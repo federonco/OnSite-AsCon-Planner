@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+html {
+  height: 100%;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -15,6 +19,7 @@
 }
 
 body {
+  min-height: 100%;
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-inter), Inter, system-ui, sans-serif;

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export async function GET(req: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const sectionId = req.nextUrl.searchParams.get("section_id");
 
   if (!sectionId) {

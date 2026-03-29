@@ -108,7 +108,7 @@ export default function PlannerGantt({
   }
 
   return (
-    <div className="planner-gantt overflow-x-auto rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card">
+    <div className="planner-gantt min-h-[min(70vh,720px)] w-full overflow-auto rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card">
       <p className="mb-3 text-dashboard-xs text-dashboard-text-muted">
         Bar length follows calendar dates. WA public holidays are not working days — see Calendar for marked dates and the activity form for working-day counts.
       </p>
@@ -121,7 +121,7 @@ export default function PlannerGantt({
             if (activity) onActivityClick(activity);
           }
         }}
-        listCellWidth=""
+        listCellWidth="220px"
         columnWidth={60}
         barCornerRadius={4}
         todayColor="rgba(59, 139, 212, 0.15)"

@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { supabase } from "@/lib/supabase";
+import { getSupabaseAdmin } from "@/lib/supabase-admin";
 import { parseProjectXml } from "@/lib/project-xml-parser";
 
 export async function POST(req: NextRequest) {
+  const supabase = getSupabaseAdmin();
   const formData = await req.formData();
   const file = formData.get("file") as File | null;
   const crewId = formData.get("crew_id") as string | null;

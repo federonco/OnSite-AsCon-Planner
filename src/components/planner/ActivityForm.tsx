@@ -52,16 +52,37 @@ export default function ActivityForm({
     () => activity?.drainer_section_id ?? defaultSectionId ?? ""
   );
   const [sectionOptions, setSectionOptions] = useState<{ id: string; name: string }[]>([]);
+  const [sectionsLoading, setSectionsLoading] = useState(false);
+  const [sectionsError, setSectionsError] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    if (!crewId) return;
+    if (!crewId) {
+      setSectionOptions([]);
+      setSectionsError(null);
+      setSectionsLoading(false);
+      return;
+    }
     let cancelled = false;
+    setSectionsLoading(true);
+    setSectionsError(null);
     (async () => {
-      const { getSupabase } = await import("@/lib/supabase");
-      const supabase = getSupabase();
-      const { data } = await supabase.from("drainer_sections").select("id, name").eq("crew_id", crewId).order("name");
-      if (!cancelled) setSectionOptions(data || []);
+      try {
+        const res = await fetch(`/api/planner/sections?crew_id=${encodeURIComponent(crewId)}`);
+        const body = (await res.json()) as { sections?: { id: string; name: string }[]; error?: string };
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        if (!cancelled) {
+          setSectionOptions(body.sections ?? []);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          setSectionsError(e instanceof Error ? e.message : "Could not load sections");
+          setSectionOptions([]);
+        }
+      } finally {
+        if (!cancelled) setSectionsLoading(false);
+      }
     })();
     return () => {
       cancelled = true;
@@ -104,6 +125,7 @@ export default function ActivityForm({
     if (!name.trim() || !crewId || !startDate || !endDate) return;
 
     setSaving(true);
+    setSaveError(null);
     try {
       if (isEditing) {
         const payload: UpdateActivityPayload = {
@@ -131,8 +153,8 @@ export default function ActivityForm({
         await onSave(payload);
       }
       onClose();
-    } catch {
-      /* API error: keep modal open; parent logs */
+    } catch (err) {
+      setSaveError(err instanceof Error ? err.message : "Save failed");
     } finally {
       setSaving(false);
     }
@@ -158,6 +180,14 @@ export default function ActivityForm({
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-4 p-6">
+          {saveError && (
+            <div
+              className="rounded-dashboard-md border border-dashboard-status-danger/40 bg-dashboard-status-danger/10 px-3 py-2 text-dashboard-sm text-dashboard-status-danger"
+              role="alert"
+            >
+              {saveError}
+            </div>
+          )}
           <div>
             <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Name *</label>
             <input
@@ -198,21 +228,27 @@ export default function ActivityForm({
             </div>
           </div>
 
-          {sectionOptions.length > 0 && (
+          {(sectionsLoading || sectionsError || sectionOptions.length > 0) && (
             <div>
               <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Section</label>
               <select
                 value={drainerSectionId}
                 onChange={(e) => setDrainerSectionId(e.target.value)}
                 className={inputClass}
+                disabled={sectionsLoading || !!sectionsError}
               >
-                <option value="">— None —</option>
+                <option value="">
+                  {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "— None —"}
+                </option>
                 {sectionOptions.map((s) => (
                   <option key={s.id} value={s.id}>
                     {s.name}
                   </option>
                 ))}
               </select>
+              {sectionsError && (
+                <p className="mt-1 text-dashboard-xs text-dashboard-status-danger">{sectionsError}</p>
+              )}
             </div>
           )}
 

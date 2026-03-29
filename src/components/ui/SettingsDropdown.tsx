@@ -14,9 +14,11 @@ const kebabIcon = (
 
 export interface SettingsDropdownProps {
   className?: string;
+  /** Optional query string for schedule manifest, e.g. `crew_id=<uuid>` */
+  scheduleManifestQuery?: string;
 }
 
-export function SettingsDropdown({ className }: SettingsDropdownProps) {
+export function SettingsDropdown({ className, scheduleManifestQuery }: SettingsDropdownProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -65,6 +67,16 @@ export function SettingsDropdown({ className }: SettingsDropdownProps) {
           >
             Export calendar
           </button>
+          <a
+            role="menuitem"
+            href={`/api/planner/schedule-manifest${scheduleManifestQuery ? `?${scheduleManifestQuery}` : ""}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="block w-full rounded-dashboard-sm px-2 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
+            onClick={() => setOpen(false)}
+          >
+            Schedule manifest (JSON)
+          </a>
         </div>
       )}
     </div>

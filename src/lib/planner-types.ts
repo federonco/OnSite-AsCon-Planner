@@ -11,6 +11,7 @@ export const HORIZON_OPTIONS = [2, 4, 6, 8] as const;
 export type HorizonWeeks = (typeof HORIZON_OPTIONS)[number];
 
 export interface PlannerActivity {
+  /** Stable UUID for DB row; use as canonical key for external schedulers / BIM tools polling Supabase or `/api/planner/schedule-manifest`. */
   id: string;
   crew_id: string;
   crew_name?: string;
