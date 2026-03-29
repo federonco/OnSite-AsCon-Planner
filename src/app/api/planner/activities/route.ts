@@ -71,6 +71,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "drainer_section_id is required" }, { status: 400 });
   }
 
+  const rawProgress = Number(body.progress_percent);
+  const progress_percent =
+    Number.isFinite(rawProgress) ? Math.min(100, Math.max(0, Math.round(rawProgress))) : 0;
+
   const row = {
     crew_id,
     name,
@@ -84,6 +88,7 @@ export async function POST(req: NextRequest) {
     is_baseline: body.is_baseline || false,
     parent_activity_id: body.parent_activity_id || null,
     sort_order: body.sort_order ?? 0,
+    progress_percent,
   };
 
   const { data, error } = await supabase

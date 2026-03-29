@@ -55,6 +55,7 @@ export interface CreateActivityPayload {
   is_baseline?: boolean;
   parent_activity_id?: string | null;
   sort_order?: number;
+  progress_percent?: number;
 }
 
 /** Payload for updating an activity (all fields optional except id) */

@@ -8,6 +8,8 @@ import {
   ACTIVITY_STATUSES,
   ActivityStatus,
 } from "@/lib/planner-types";
+
+const STATUS_PICKER_OPTIONS = ACTIVITY_STATUSES.filter((s) => s !== "blocked");
 import { ACTIVITY_STATUS_COLORS, ACTIVITY_STATUS_LABELS } from "@/lib/planner-constants";
 import { countWaWorkingDaysInclusive } from "@/lib/wa-public-holidays";
 import { differenceInCalendarDays } from "date-fns";
@@ -46,6 +48,9 @@ export default function ActivityForm({
   const [startDate, setStartDate] = useState(activity?.start_date || defaultDate || "");
   const [endDate, setEndDate] = useState(activity?.end_date || defaultDate || "");
   const [status, setStatus] = useState<ActivityStatus>(activity?.status || "planned");
+  const [progressPercent, setProgressPercent] = useState(() =>
+    Math.min(100, Math.max(0, Math.round(activity?.progress_percent ?? 0)))
+  );
   const [notes, setNotes] = useState(activity?.notes || "");
   const [wbsCode, setWbsCode] = useState(activity?.wbs_code || "");
   const [drainerSectionId, setDrainerSectionId] = useState(
@@ -152,6 +157,7 @@ export default function ActivityForm({
           start_date: startDate,
           end_date: endDate,
           status,
+          progress_percent: Math.min(100, Math.max(0, Math.round(progressPercent))),
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
           drainer_section_id: drainerSectionId.trim(),
@@ -164,6 +170,7 @@ export default function ActivityForm({
           start_date: startDate,
           end_date: endDate,
           status,
+          progress_percent: Math.min(100, Math.max(0, Math.round(progressPercent))),
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
           drainer_section_id: drainerSectionId.trim(),
@@ -315,9 +322,35 @@ export default function ActivityForm({
           )}
 
           <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <label className="block text-dashboard-sm text-dashboard-text-secondary">Progress</label>
+              <span className="text-dashboard-sm font-medium tabular-nums text-dashboard-text-primary">
+                {progressPercent}%
+              </span>
+            </div>
+            <input
+              type="range"
+              min={0}
+              max={100}
+              step={1}
+              value={progressPercent}
+              onChange={(e) => setProgressPercent(Number(e.target.value))}
+              className="h-2 w-full cursor-pointer appearance-none rounded-full bg-dashboard-border accent-[#5B5FEF]"
+            />
+            <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">
+              Shown on the Gantt bar; you can also drag the bar handle in Gantt view.
+            </p>
+          </div>
+
+          <div>
             <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Status</label>
+            {status === "blocked" && (
+              <p className="mb-2 text-dashboard-xs text-dashboard-text-muted">
+                Currently <span className="font-medium text-dashboard-status-danger">blocked</span>. Choose a status below to update.
+              </p>
+            )}
             <div className="flex flex-wrap gap-2">
-              {ACTIVITY_STATUSES.map((s) => (
+              {STATUS_PICKER_OPTIONS.map((s) => (
                 <button
                   key={s}
                   type="button"

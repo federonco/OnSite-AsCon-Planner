@@ -8,7 +8,7 @@ import { PlannerActivity, UpdateActivityPayload, type HorizonWeeks } from "@/lib
 import HorizonSelector from "@/components/planner/HorizonSelector";
 import { ACTIVITY_STATUS_COLORS } from "@/lib/planner-constants";
 import { getCrewColor } from "@/lib/planner-constants";
-import { format, startOfDay } from "date-fns";
+import { format, startOfDay, startOfWeek } from "date-fns";
 import { addDaysDateOnly, subDaysDateOnly } from "@/lib/planner-date";
 import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import { getWaPublicHolidayName } from "@/lib/wa-public-holidays";
@@ -51,6 +51,24 @@ export default function PlannerCalendar({
     [visibleRange]
   );
 
+  /** N consecutive calendar weeks from Monday of this week — matches HorizonSelector (2W / 4W / …). */
+  const calendarViews = useMemo(
+    () => ({
+      plannerHorizon: {
+        type: "dayGrid" as const,
+        duration: { weeks: horizon },
+        buttonText: `${horizon}W`,
+        dayMaxEvents: true,
+        aspectRatio: Math.max(0.55, 2.4 / horizon),
+      },
+      dayGridWeek: {
+        dayMaxEvents: true,
+        aspectRatio: 0.42,
+      },
+    }),
+    [horizon]
+  );
+
   const events: EventInput[] = useMemo(() => {
     const out: EventInput[] = [];
     for (const act of activities) {
@@ -74,8 +92,11 @@ export default function PlannerCalendar({
     return out;
   }, [activities, crewMap]);
 
-  /** Intentionally stable: "today" at mount; calendar remounts via `key` when horizon/range changes. */
-  const initialDate = useMemo(() => startOfDay(new Date()), []);
+  /** Monday-start week containing today; remount via `key` picks fresh date when horizon/range changes. */
+  const initialDate = useMemo(
+    () => startOfWeek(startOfDay(new Date()), { weekStartsOn: 1 }),
+    []
+  );
 
   const handleEventClick = (info: EventClickArg) => {
     const activity = info.event.extendedProps.activity as PlannerActivity;
@@ -138,20 +159,14 @@ export default function PlannerCalendar({
       <FullCalendar
         key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}`}
         plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="dayGridMonth"
+        initialView="plannerHorizon"
         initialDate={initialDate}
         events={events}
         editable={true}
         selectable={true}
         selectMirror={true}
         dayMaxEvents={4}
-        views={{
-          dayGridWeek: {
-            dayMaxEvents: true,
-            /* dayMinWidth requires @fullcalendar/scrollgrid — use CSS min-width on cells instead */
-            aspectRatio: 0.42,
-          },
-        }}
+        views={calendarViews}
         weekends={false}
         validRange={validRange}
         dayCellClassNames={dayCellClassNames}
@@ -159,7 +174,7 @@ export default function PlannerCalendar({
         headerToolbar={{
           left: "prev,next today",
           center: "title",
-          right: "dayGridMonth,dayGridWeek",
+          right: "plannerHorizon,dayGridWeek,dayGridMonth",
         }}
         eventClick={handleEventClick}
         eventDrop={handleEventDrop}

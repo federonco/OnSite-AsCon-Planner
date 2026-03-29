@@ -94,7 +94,14 @@ function PlannerTaskListTable({
                 <div className={expanderSymbol ? GTL.exp : GTL.expEmpty} onClick={() => onExpanderClick(t)}>
                   {expanderSymbol}
                 </div>
-                <div>{t.name}</div>
+                <div className="min-w-0 flex-1">
+                  <div className="truncate">{t.name}</div>
+                  {t.type === "task" && (
+                    <div className="text-[11px] font-medium tabular-nums text-dashboard-text-muted">
+                      {Math.round(t.progress)}% complete
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             <div className={GTL.cell} style={{ minWidth: rowWidth, maxWidth: rowWidth }}>
@@ -344,14 +351,15 @@ export default function PlannerGantt({
   }, []);
 
   const ganttLayout = useMemo(() => {
-    /** ~30% width for task list (Name + From + To) → ~70% for timeline. */
-    const listShare = 0.3;
-    const listCellPx = Math.max(52, Math.floor((chartBox.width * listShare) / 3));
+    /** Timeline ~70% width; task list (3 columns) gets the remainder minus gap. */
+    const gapPx = 16;
+    const chartTargetPx = Math.floor(chartBox.width * 0.7);
+    const listTotalPx = Math.max(0, chartBox.width - chartTargetPx - gapPx);
+    const listCellPx = Math.max(48, Math.floor(listTotalPx / 3));
     const calendarHeaderH = 50;
     const horizontalScrollReserve = 20;
     const n = tasks.length;
-    const listTotalPx = 3 * listCellPx;
-    const chartW = Math.max(160, chartBox.width - listTotalPx - 16);
+    const chartW = Math.max(160, chartTargetPx);
     const bodyH = Math.max(100, chartBox.height - calendarHeaderH - horizontalScrollReserve);
     const rowHeight = n === 0 ? 36 : Math.max(22, Math.min(50, Math.floor(bodyH / n)));
     const ganttHeight = n === 0 ? bodyH : rowHeight * n;
@@ -382,9 +390,36 @@ export default function PlannerGantt({
 
   return (
     <div className="planner-gantt flex h-[min(72vh,calc(100dvh-13rem))] min-h-[280px] w-full max-w-full flex-col overflow-hidden rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card">
-      <p className="mb-3 shrink-0 text-dashboard-xs text-dashboard-text-muted">
-        Timeline scales to fit this panel (horizon {horizon}W). WA public holidays — see Calendar and the activity form for working-day counts.
-      </p>
+      <div
+        className="mb-3 flex shrink-0 flex-wrap items-center gap-x-4 gap-y-2 border-b border-dashboard-border pb-3 text-dashboard-xs text-dashboard-text-secondary"
+        aria-label="Gantt status colours"
+      >
+        <span className="font-medium text-dashboard-text-muted">Legend</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2.5 w-4 shrink-0 rounded-sm border border-dashboard-border/60"
+            style={{ backgroundColor: ACTIVITY_STATUS_COLORS.planned }}
+            aria-hidden
+          />
+          Blue — Planned
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2.5 w-4 shrink-0 rounded-sm border border-dashboard-border/60"
+            style={{ backgroundColor: ACTIVITY_STATUS_COLORS.in_progress }}
+            aria-hidden
+          />
+          Yellow — In progress
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span
+            className="h-2.5 w-4 shrink-0 rounded-sm border border-dashboard-border/60"
+            style={{ backgroundColor: ACTIVITY_STATUS_COLORS.done }}
+            aria-hidden
+          />
+          Green — Done
+        </span>
+      </div>
       <div ref={chartMountRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <Gantt
           key={`${horizon}-${ganttLayout.rowHeight}-${ganttLayout.columnWidth}-${ganttLayout.listCellPx}`}

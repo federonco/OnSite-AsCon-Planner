@@ -188,20 +188,76 @@ body {
   pointer-events: none;
 }
 
-/* Gantt dark theme overrides */
+/* Gantt — grid + task list match dashboard planner (surface, borders, text; bars keep status colors from JS) */
+.planner-gantt ._3eULf,
+.planner-gantt ._CZjuD,
+.planner-gantt ._2B2zv {
+  background-color: #ffffff;
+}
+
+/* SVG grid body: white / dashboard-bg stripes */
 .planner-gantt ._2dZTy {
-  fill: #111827;
+  fill: #ffffff;
+}
+.planner-gantt ._2dZTy:nth-child(even) {
+  fill: #f5f7fb;
 }
 
+.planner-gantt ._3rUKi,
+.planner-gantt ._RuwuK,
+.planner-gantt ._1rLuZ {
+  stroke: #e6e9f0;
+}
+
+/* Calendar header cells + labels */
+.planner-gantt ._35nLX {
+  fill: #ffffff;
+  stroke: #e6e9f0;
+}
+.planner-gantt ._9w8d5 {
+  fill: #6b7280;
+}
+.planner-gantt ._2q1Kt {
+  fill: #1a1d2e;
+}
+
+/* Task list table (Name / From / To) */
+.planner-gantt ._3_ygE {
+  border-bottom-color: #e6e9f0;
+  border-top-color: #e6e9f0;
+  border-left-color: #e6e9f0;
+}
 .planner-gantt ._3ZbQT {
-  fill: #1f2937;
+  border-bottom-color: #e6e9f0;
+  border-left-color: #e6e9f0;
+}
+.planner-gantt ._2eZzQ {
+  border-right-color: #e6e9f0;
+}
+.planner-gantt ._34SS0:nth-of-type(even) {
+  background-color: #f5f7fb;
+}
+.planner-gantt ._3lLk3 {
+  color: #1a1d2e;
+}
+.planner-gantt ._2QjE6 {
+  color: #6b7280;
+}
+.planner-gantt ._2QjE6:hover {
+  color: #5b5fef;
 }
 
-.planner-gantt ._9w8d5,
-.planner-gantt text {
-  fill: #9ca3af;
+/* Bar resize handles — dashboard primary */
+.planner-gantt ._3w_5u {
+  fill: #5b5fef;
 }
 
-.planner-gantt ._34SS0 {
-  stroke: #374151;
+/* Horizontal scroll area */
+.planner-gantt ._2k9Ys::-webkit-scrollbar-thumb {
+  background: rgba(26, 29, 46, 0.12);
+  background-clip: padding-box;
+}
+.planner-gantt ._2k9Ys::-webkit-scrollbar-thumb:hover {
+  background: rgba(26, 29, 46, 0.2);
+  background-clip: padding-box;
 }

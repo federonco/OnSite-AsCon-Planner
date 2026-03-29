@@ -435,12 +435,7 @@ export default function PlannerPage() {
               Could not load activities: {activitiesFetchError}
             </div>
           )}
-          <div>
-            <h1 className="text-dashboard-xl font-semibold text-dashboard-text-primary">OnSite Planner</h1>
-            <p className="mt-1 text-dashboard-sm font-normal text-dashboard-text-secondary">
-              Pipeline activities · WA horizon &amp; crew filters
-            </p>
-          </div>
+          <h1 className="text-dashboard-xl font-semibold text-dashboard-text-primary">OnSite Planner</h1>
 
           {loading && activities.length === 0 ? (
             <LoadingPlaceholder />
