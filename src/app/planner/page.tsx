@@ -69,6 +69,7 @@ export default function PlannerPage() {
   const [defaultDate, setDefaultDate] = useState<string | null>(null);
   const [showImporter, setShowImporter] = useState(false);
   const [viewMode, setViewMode] = useState<"calendar" | "gantt">("calendar");
+  const [ganttSelected, setGanttSelected] = useState<PlannerActivity | null>(null);
   const [sectionFilter, setSectionFilter] = useState<string | null>(null);
   const [drainerSections, setDrainerSections] = useState<{ id: string; name: string }[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
@@ -238,6 +239,10 @@ export default function PlannerPage() {
     }
   }, [onlyEnabledCrewId]);
 
+  useEffect(() => {
+    if (viewMode !== "gantt") setGanttSelected(null);
+  }, [viewMode]);
+
   const handleSave = async (payload: CreateActivityPayload | UpdateActivityPayload) => {
     const res = await fetch("/api/planner/activities", {
       method: "id" in payload ? "PUT" : "POST",
@@ -281,29 +286,31 @@ export default function PlannerPage() {
     setActivities((prev) => prev.filter((a) => a.id !== id));
     setShowActivityForm(false);
     setSelectedActivity(null);
+    setGanttSelected((g) => (g?.id === id ? null : g));
   };
 
-  const handleActivityMove = async (payload: UpdateActivityPayload) => {
+  const handleActivityMove = useCallback(async (payload: UpdateActivityPayload): Promise<boolean> => {
     const res = await fetch("/api/planner/activities", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
     });
-    if (res.ok) {
-      const raw = (await res.json()) as unknown;
-      const saved =
-        raw && typeof raw === "object"
-          ? mapRowToPlannerActivity(raw as Record<string, unknown>)
-          : null;
-      if (saved) {
-        setActivities((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
-      } else {
-        void fetchActivities({ silent: true });
-      }
+    if (!res.ok) return false;
+    const raw = (await res.json()) as unknown;
+    const saved =
+      raw && typeof raw === "object"
+        ? mapRowToPlannerActivity(raw as Record<string, unknown>)
+        : null;
+    if (saved) {
+      setActivities((prev) => prev.map((a) => (a.id === saved.id ? saved : a)));
+    } else {
+      void fetchActivities({ silent: true });
     }
-  };
+    return true;
+  }, [fetchActivities]);
 
   const handleActivityClick = (activity: PlannerActivity) => {
+    setGanttSelected(activity);
     setSelectedActivity(activity);
     setDefaultDate(null);
     setShowActivityForm(true);
@@ -349,7 +356,7 @@ export default function PlannerPage() {
                 <div className="hidden min-w-0 max-w-md flex-1 md:block">
                   <SearchInput placeholder="Search activities, crews, or WBS…" />
                 </div>
-                <div className="flex flex-wrap items-center gap-3">
+                <div className="flex shrink-0 flex-wrap items-center gap-3">
                   <div className="flex rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
                     <button
                       type="button"
@@ -374,7 +381,11 @@ export default function PlannerPage() {
                       Gantt
                     </button>
                   </div>
-                  <HorizonSelector value={horizon} onChange={setHorizon} />
+                  {viewMode === "gantt" && (
+                    <div className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
+                      <HorizonSelector value={horizon} onChange={setHorizon} />
+                    </div>
+                  )}
                   <div className="hidden h-6 w-px bg-dashboard-border sm:block" />
                   <CrewFilter
                     crews={crews}
@@ -438,6 +449,7 @@ export default function PlannerPage() {
               activities={visibleActivities}
               crewMap={crewMap}
               horizon={horizon}
+              onHorizonChange={setHorizon}
               onActivityClick={handleActivityClick}
               onActivityMove={handleActivityMove}
               onDateSelect={handleDateSelect}
@@ -452,6 +464,11 @@ export default function PlannerPage() {
           )}
 
           <div className="flex flex-wrap items-center gap-6 text-dashboard-sm text-dashboard-text-secondary">
+            {viewMode === "gantt" && ganttSelected && (
+              <span className="font-medium text-dashboard-text-primary">
+                Selected: {ganttSelected.name}
+              </span>
+            )}
             <span>{visibleActivities.length} activities</span>
             <span>{visibleActivities.filter((a) => a.status === "in_progress").length} in progress</span>
             <span>{visibleActivities.filter((a) => a.status === "done").length} done</span>

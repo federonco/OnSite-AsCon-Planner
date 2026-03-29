@@ -14,9 +14,10 @@ export interface SidebarItemProps {
   href?: string;
 }
 
-const itemClassName = (active: boolean | undefined) =>
+const itemClassName = (active: boolean | undefined, collapsed?: boolean) =>
   cn(
     "flex h-sidebar-item w-full items-center gap-3 rounded-dashboard-md px-3 text-dashboard-sm font-medium text-dashboard-sidebar-text transition-colors duration-dashboard-fast ease-dashboard",
+    collapsed && "justify-center gap-0 px-2",
     active
       ? "bg-dashboard-sidebar-active"
       : "bg-transparent hover:bg-dashboard-sidebar-item"
@@ -37,7 +38,7 @@ export function SidebarItem({ icon, label, active, onClick, collapsed, href }: S
       <Link
         href={href}
         title={collapsed ? label : undefined}
-        className={itemClassName(active)}
+        className={itemClassName(active, collapsed)}
         aria-current={active ? "page" : undefined}
       >
         {inner}
@@ -46,7 +47,7 @@ export function SidebarItem({ icon, label, active, onClick, collapsed, href }: S
   }
 
   return (
-    <button type="button" onClick={onClick} title={collapsed ? label : undefined} className={itemClassName(active)}>
+    <button type="button" onClick={onClick} title={collapsed ? label : undefined} className={itemClassName(active, collapsed)}>
       {inner}
     </button>
   );

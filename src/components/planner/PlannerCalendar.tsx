@@ -4,7 +4,8 @@ import { useMemo } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
-import { PlannerActivity, UpdateActivityPayload } from "@/lib/planner-types";
+import { PlannerActivity, UpdateActivityPayload, type HorizonWeeks } from "@/lib/planner-types";
+import HorizonSelector from "@/components/planner/HorizonSelector";
 import { ACTIVITY_STATUS_COLORS } from "@/lib/planner-constants";
 import { getCrewColor } from "@/lib/planner-constants";
 import { format, startOfDay } from "date-fns";
@@ -24,9 +25,10 @@ interface CrewInfo {
 interface PlannerCalendarProps {
   activities: PlannerActivity[];
   crewMap: Map<string, CrewInfo>;
-  horizon: number;
+  horizon: HorizonWeeks;
+  onHorizonChange: (weeks: HorizonWeeks) => void;
   onActivityClick: (activity: PlannerActivity) => void;
-  onActivityMove: (payload: UpdateActivityPayload) => void;
+  onActivityMove: (payload: UpdateActivityPayload) => void | Promise<boolean>;
   onDateSelect: (startDate: string, endDate: string) => void;
 }
 
@@ -34,6 +36,7 @@ export default function PlannerCalendar({
   activities,
   crewMap,
   horizon,
+  onHorizonChange,
   onActivityClick,
   onActivityMove,
   onDateSelect,
@@ -126,6 +129,12 @@ export default function PlannerCalendar({
 
   return (
     <div className="planner-calendar rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card">
+      <div className="relative z-[1] mb-4 flex flex-col gap-2 border-b border-dashboard-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+        <span className="text-dashboard-sm font-medium text-dashboard-text-secondary">Planning horizon</span>
+        <div className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
+          <HorizonSelector value={horizon} onChange={onHorizonChange} />
+        </div>
+      </div>
       <FullCalendar
         key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}`}
         plugins={[dayGridPlugin, interactionPlugin]}
@@ -136,6 +145,13 @@ export default function PlannerCalendar({
         selectable={true}
         selectMirror={true}
         dayMaxEvents={4}
+        views={{
+          dayGridWeek: {
+            dayMaxEvents: true,
+            /* dayMinWidth requires @fullcalendar/scrollgrid — use CSS min-width on cells instead */
+            aspectRatio: 0.42,
+          },
+        }}
         weekends={false}
         validRange={validRange}
         dayCellClassNames={dayCellClassNames}

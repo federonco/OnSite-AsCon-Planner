@@ -34,6 +34,8 @@ body {
 /* FullCalendar — dashboard light workspace (matches design tokens) */
 .planner-calendar .fc {
   --fc-border-color: #e6e9f0;
+  /* Default FC uses white button text; we use light surfaces → dark label text */
+  --fc-button-text-color: #1a1d2e;
   --fc-button-bg-color: #ffffff;
   --fc-button-border-color: #e6e9f0;
   --fc-button-hover-bg-color: #f5f7fb;
@@ -49,6 +51,55 @@ body {
   color: #1a1d2e;
 }
 
+/* Toolbar: match dashboard surface / primary (FC v6 still needs explicit text on active) */
+.planner-calendar .fc .fc-toolbar.fc-header-toolbar {
+  gap: 0.5rem;
+}
+
+.planner-calendar .fc .fc-button {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.25;
+  padding: 0.375rem 0.75rem;
+  border-radius: 12px;
+  text-transform: capitalize;
+  box-shadow: none;
+}
+
+.planner-calendar .fc .fc-button:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px rgba(91, 95, 239, 0.25);
+}
+
+.planner-calendar .fc .fc-button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.planner-calendar .fc .fc-button.fc-button-primary {
+  background-color: var(--fc-button-bg-color);
+  border-color: var(--fc-button-border-color);
+  color: var(--fc-button-text-color);
+}
+
+.planner-calendar .fc .fc-button.fc-button-primary:not(:disabled):hover {
+  background-color: var(--fc-button-hover-bg-color);
+  border-color: var(--fc-button-hover-border-color);
+  color: #1a1d2e;
+}
+
+.planner-calendar .fc .fc-button.fc-button-primary.fc-button-active {
+  background-image: linear-gradient(to right, #5b5fef, #6d72f6);
+  background-color: #5b5fef;
+  border-color: #5b5fef;
+  color: #ffffff;
+}
+
+.planner-calendar .fc .fc-button.fc-button-primary.fc-button-active:not(:disabled):hover {
+  background-image: linear-gradient(to right, #6d72f6, #7b80f7);
+  color: #ffffff;
+}
+
 .planner-calendar .fc .fc-col-header-cell {
   background-color: #f5f7fb;
   font-weight: 500;
@@ -60,9 +111,48 @@ body {
   font-weight: 400;
 }
 
-.planner-calendar .fc .fc-day-today .fc-daygrid-day-number {
-  color: #5b5fef;
+/* Week view: taller cells, wider columns (sin dayMinWidth → no ScrollGrid plugin), eventos más legibles */
+.planner-calendar .fc-dayGridWeek-view .fc-daygrid-day {
+  min-height: 220px;
+  min-width: 140px;
+}
+
+.planner-calendar .fc-dayGridWeek-view .fc-daygrid-day-frame {
+  min-height: 200px;
+}
+
+.planner-calendar .fc-dayGridWeek-view .fc-daygrid-day-number {
+  font-size: 0.95rem;
   font-weight: 600;
+  padding: 6px 8px;
+}
+
+.planner-calendar .fc-dayGridWeek-view .fc-daygrid-day-events {
+  margin-top: 4px;
+}
+
+.planner-calendar .fc-dayGridWeek-view .fc-event {
+  font-size: 0.8125rem;
+  line-height: 1.35;
+  padding: 4px 8px;
+  margin-bottom: 3px;
+}
+
+.planner-calendar .fc-dayGridWeek-view .fc-more-link {
+  font-size: 0.8125rem;
+  font-weight: 600;
+  margin-top: 4px;
+}
+
+.planner-calendar .fc .fc-day-today .fc-daygrid-day-number {
+  color: #dc2626;
+  font-weight: 600;
+}
+
+/* Today: red frame (day grid month + week) */
+.planner-calendar .fc .fc-daygrid-day.fc-day-today .fc-daygrid-day-frame {
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 2px #ef4444;
 }
 
 .planner-calendar .fc .fc-event {

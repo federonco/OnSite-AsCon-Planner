@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import localFont from "next/font/local";
+import "gantt-task-react/dist/index.css";
 import "./globals.css";
 
 const inter = Inter({
@@ -23,6 +24,9 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "OnSite Pipeline Tracker",
   description: "DN1600 MSCL Aqueduct — 27km Pipeline Tracking System",
+  icons: {
+    icon: [{ url: "/onsite-icon.svg", type: "image/svg+xml" }],
+  },
 };
 
 export default function RootLayout({
