@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -52,6 +52,9 @@ export default function PlannerCalendar({
   onDateSelect,
   peopleLeaves = [],
 }: PlannerCalendarProps) {
+  /** When true, Sat/Sun columns are hidden (FullCalendar `weekends={false}`). */
+  const [hideWeekends, setHideWeekends] = useState(false);
+
   const visibleRange = useMemo(
     () => getPlannerHorizonVisibleRange(horizon, activities),
     [activities, horizon]
@@ -187,14 +190,25 @@ export default function PlannerCalendar({
 
   return (
     <div className="planner-calendar rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card">
-      <div className="relative z-[1] mb-4 flex flex-col gap-2 border-b border-dashboard-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <div className="relative z-[1] mb-4 flex flex-col gap-3 border-b border-dashboard-border pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <span className="text-dashboard-sm font-medium text-dashboard-text-secondary">Planning horizon</span>
-        <div className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
-          <HorizonSelector value={horizon} onChange={onHorizonChange} />
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
+          <div className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
+            <HorizonSelector value={horizon} onChange={onHorizonChange} />
+          </div>
+          <label className="flex cursor-pointer select-none items-center gap-2 text-dashboard-sm text-dashboard-text-secondary">
+            <input
+              type="checkbox"
+              checked={hideWeekends}
+              onChange={(e) => setHideWeekends(e.target.checked)}
+              className="h-4 w-4 rounded border-dashboard-border text-dashboard-primary focus:ring-2 focus:ring-dashboard-primary/30"
+            />
+            Hide weekends
+          </label>
         </div>
       </div>
       <FullCalendar
-        key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}`}
+        key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}-w${hideWeekends ? 0 : 1}`}
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="plannerHorizon"
         initialDate={initialDate}
@@ -205,7 +219,7 @@ export default function PlannerCalendar({
         selectMirror={true}
         dayMaxEvents={4}
         views={calendarViews}
-        weekends={true}
+        weekends={!hideWeekends}
         validRange={validRange}
         dayCellClassNames={dayCellClassNames}
         dayCellDidMount={dayCellDidMount}
@@ -222,8 +236,11 @@ export default function PlannerCalendar({
         eventDisplay="block"
       />
       <p className="mt-3 text-dashboard-xs text-dashboard-text-muted">
-        Purple blocks are people leave (read-only). Weekends (Sat–Sun) are shown. WA public holidays are
-        highlighted and do not count as working days in the summary below.
+        Purple blocks are people leave (read-only).{" "}
+        {hideWeekends
+          ? "Weekends are hidden from the grid; enable the checkbox above to show Sat–Sun."
+          : "Weekends (Sat–Sun) are shown. Uncheck Hide weekends to collapse them."}{" "}
+        WA public holidays are highlighted and do not count as working days in the summary below.
       </p>
     </div>
   );

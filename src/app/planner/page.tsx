@@ -78,6 +78,7 @@ export default function PlannerPage() {
   const [drainerSections, setDrainerSections] = useState<{ id: string; name: string }[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsFetchError, setSectionsFetchError] = useState<string | null>(null);
+  const [crewsFetchError, setCrewsFetchError] = useState<string | null>(null);
   const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
   const [showLeaveQr, setShowLeaveQr] = useState(false);
 
@@ -125,6 +126,15 @@ export default function PlannerPage() {
   useEffect(() => {
     setSectionFilter(null);
   }, [crewIdForSections]);
+
+  /** Drop section filter if the current id is not in the loaded list (stale controlled value breaks some browsers). */
+  useEffect(() => {
+    if (!sectionFilter) return;
+    if (drainerSections.length === 0) return;
+    if (!drainerSections.some((s) => s.id === sectionFilter)) {
+      setSectionFilter(null);
+    }
+  }, [drainerSections, sectionFilter]);
 
   useEffect(() => {
     if (!crewIdForSections) {
@@ -178,16 +188,19 @@ export default function PlannerPage() {
 
   useEffect(() => {
     const fetchCrews = async () => {
+      setCrewsFetchError(null);
       try {
-        const { getSupabase } = await import("@/lib/supabase");
-        const supabase = getSupabase();
-        const { data } = await supabase.from("crews").select("id, name").order("name");
-        if (data) setCrews(data);
+        const res = await fetch("/api/planner/crews");
+        const body = (await res.json()) as { crews?: Crew[]; error?: string };
+        if (!res.ok) throw new Error(body.error || res.statusText);
+        setCrews(body.crews ?? []);
       } catch (err) {
         console.error("Failed to fetch crews:", err);
+        setCrews([]);
+        setCrewsFetchError(err instanceof Error ? err.message : "Failed to load crews");
       }
     };
-    fetchCrews();
+    void fetchCrews();
   }, []);
 
   const fetchActivities = useCallback(async (opts?: { silent?: boolean }) => {
@@ -430,12 +443,19 @@ export default function PlannerPage() {
                     </div>
                   )}
                   <div className="hidden h-6 w-px bg-dashboard-border sm:block" />
-                  <CrewFilter
-                    crews={crews}
-                    value={typeof onlyEnabledCrewId === "string" ? onlyEnabledCrewId : crewFilter}
-                    onChange={setCrewFilter}
-                    onlyEnabledCrewId={onlyEnabledCrewId}
-                  />
+                  <div className="flex min-w-0 flex-col gap-1">
+                    <CrewFilter
+                      crews={crews}
+                      value={typeof onlyEnabledCrewId === "string" ? onlyEnabledCrewId : crewFilter}
+                      onChange={setCrewFilter}
+                      onlyEnabledCrewId={onlyEnabledCrewId}
+                    />
+                    {crewsFetchError && (
+                      <p className="max-w-[20rem] text-dashboard-xs text-dashboard-status-danger" role="alert">
+                        {crewsFetchError}
+                      </p>
+                    )}
+                  </div>
                   <SectionFilter
                     sections={drainerSections}
                     value={sectionFilter}
