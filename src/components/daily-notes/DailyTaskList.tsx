@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { format, parseISO } from "date-fns";
-import type { DailyTaskView } from "@/lib/daily-task-types";
+import type { DailyTaskPriority, DailyTaskView } from "@/lib/daily-task-types";
 import { cn } from "@/lib/cn";
 
 const NOTES_MAX = 4000;
+const PRIORITIES: DailyTaskPriority[] = ["low", "medium", "high", "critical"];
 
 interface DailyTaskListProps {
   selectedDate: string;
@@ -17,6 +18,7 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
   const [error, setError] = useState<string | null>(null);
   const [newTitle, setNewTitle] = useState("");
   const [saving, setSaving] = useState(false);
+  const [togglingIds, setTogglingIds] = useState<Set<string>>(new Set());
   /** Local draft for notes while editing (keyed by task id) */
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
 
@@ -86,10 +88,22 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
   };
 
   const toggle = async (task: DailyTaskView) => {
-    if (saving) return;
-    setSaving(true);
+    if (togglingIds.has(task.id)) return;
     setError(null);
     const nextCompleted = !task.is_completed;
+    const prev = tasks;
+    setTasks((cur) =>
+      cur.map((t) =>
+        t.id === task.id
+          ? {
+              ...t,
+              is_completed: nextCompleted,
+              completed_on_date: nextCompleted ? selectedDate : null,
+            }
+          : t
+      )
+    );
+    setTogglingIds((cur) => new Set(cur).add(task.id));
     try {
       const res = await fetch("/api/daily-notes/tasks", {
         method: "PATCH",
@@ -102,13 +116,40 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
       const body = await res.json().catch(() => null);
       if (!res.ok) {
         setError(typeof body?.error === "string" ? body.error : res.statusText);
-        return;
+        setTasks(prev);
+      } else if (body && typeof body === "object" && "id" in body) {
+        const updated = body as DailyTaskView;
+        setTasks((cur) => cur.map((t) => (t.id === updated.id ? { ...t, ...updated } : t)));
       }
-      await load();
     } catch {
       setError("Failed to update task");
+      setTasks(prev);
     } finally {
-      setSaving(false);
+      setTogglingIds((cur) => {
+        const next = new Set(cur);
+        next.delete(task.id);
+        return next;
+      });
+    }
+  };
+
+  const patchTask = async (task: DailyTaskView, patch: Partial<Pick<DailyTaskView, "priority">>) => {
+    const previous = tasks;
+    setTasks((cur) => cur.map((t) => (t.id === task.id ? { ...t, ...patch } : t)));
+    try {
+      const res = await fetch("/api/daily-notes/tasks", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: task.id, ...patch }),
+      });
+      const body = await res.json().catch(() => null);
+      if (!res.ok) {
+        setError(typeof body?.error === "string" ? body.error : res.statusText);
+        setTasks(previous);
+      }
+    } catch {
+      setError("Failed to update task");
+      setTasks(previous);
     }
   };
 
@@ -162,6 +203,18 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
     }
   };
 
+  const sortedTasks = useMemo(() => {
+    const weight: Record<DailyTaskPriority, number> = { critical: 0, high: 1, medium: 2, low: 3 };
+    return [...tasks].sort((a, b) => {
+      if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+      const pw = weight[a.priority] - weight[b.priority];
+      if (pw !== 0) return pw;
+      const od = a.origin_date.localeCompare(b.origin_date);
+      if (od !== 0) return od;
+      return a.created_at.localeCompare(b.created_at);
+    });
+  }, [tasks]);
+
   return (
     <div className="space-y-4">
       {error && (
@@ -172,6 +225,21 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
           {error}
         </div>
       )}
+      <div className="flex items-center gap-3 rounded-dashboard-md border border-dashboard-border/70 bg-dashboard-bg px-3 py-2 text-dashboard-xs text-dashboard-text-secondary">
+        <span className="font-medium">Legend</span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-dashboard-status-danger" />
+          Critical priority
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-dashboard-status-warning" />
+          Medium priority
+        </span>
+        <span className="inline-flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full bg-dashboard-text-muted" />
+          Low priority
+        </span>
+      </div>
 
       <form onSubmit={addTask} className="flex flex-col gap-2 sm:flex-row sm:items-center">
         <input
@@ -200,7 +268,7 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
         </p>
       ) : (
         <ul className="space-y-3">
-          {tasks.map((task) => (
+          {sortedTasks.map((task) => (
             <li
               key={task.id}
               className={cn(
@@ -210,23 +278,52 @@ export function DailyTaskList({ selectedDate }: DailyTaskListProps) {
               )}
             >
               <div className="flex items-start gap-3 px-3 py-3">
-                <input
-                  type="checkbox"
-                  checked={task.is_completed}
-                  onChange={() => void toggle(task)}
-                  disabled={saving}
-                  className="mt-1 h-4 w-4 shrink-0 rounded border-dashboard-border text-dashboard-primary transition-colors focus:ring-dashboard-primary/40"
-                  aria-label={task.is_completed ? "Mark incomplete" : "Mark complete"}
-                />
-                <div className="min-w-0 flex-1 space-y-2">
+                <div className="mt-1 flex items-center gap-2">
                   <span
                     className={cn(
-                      "block text-dashboard-sm text-dashboard-text-primary",
-                      task.is_completed && "line-through text-dashboard-text-muted"
+                      "h-4 w-1.5 rounded-full",
+                      task.color === "blue" && "bg-sky-500",
+                      task.color === "amber" && "bg-amber-500",
+                      task.color === "violet" && "bg-violet-500",
+                      !["blue", "amber", "violet"].includes(task.color) &&
+                        "bg-dashboard-primary"
                     )}
-                  >
-                    {task.title}
-                  </span>
+                  />
+                  <input
+                    type="checkbox"
+                    checked={task.is_completed}
+                    onChange={() => void toggle(task)}
+                    disabled={togglingIds.has(task.id)}
+                    className="h-4 w-4 shrink-0 rounded border-dashboard-border text-dashboard-primary transition-colors focus:ring-dashboard-primary/40"
+                    aria-label={task.is_completed ? "Mark incomplete" : "Mark complete"}
+                  />
+                </div>
+                <div className="min-w-0 flex-1 space-y-2">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        "block text-dashboard-sm text-dashboard-text-primary",
+                        task.is_completed && "line-through text-dashboard-text-muted"
+                      )}
+                    >
+                      {task.title}
+                    </span>
+                    <select
+                      value={task.priority}
+                      onChange={(e) =>
+                        void patchTask(task, {
+                          priority: e.target.value as DailyTaskPriority,
+                        })
+                      }
+                      className="rounded-dashboard-sm border border-dashboard-border bg-dashboard-surface px-1.5 py-0.5 text-[11px] text-dashboard-text-secondary"
+                    >
+                      {PRIORITIES.map((p) => (
+                        <option key={p} value={p}>
+                          {p}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
                   {task.is_carried_over && !task.is_completed && (
                     <p className="text-dashboard-xs text-dashboard-text-muted">
                       Carried over · started {format(parseISO(`${task.origin_date}T12:00:00`), "d MMM yyyy")}

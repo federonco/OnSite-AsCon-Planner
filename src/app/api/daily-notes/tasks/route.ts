@@ -7,6 +7,27 @@ import { isValidDateOnlyString, toDateOnly } from "@/lib/planner-date";
 export const dynamic = "force-dynamic";
 
 const NOTES_MAX = 4000;
+const PRIORITY_VALUES = ["low", "medium", "high", "critical"] as const;
+type PriorityValue = (typeof PRIORITY_VALUES)[number];
+
+const COLOR_VALUES = ["blue", "amber", "violet"] as const;
+type ColorValue = (typeof COLOR_VALUES)[number];
+
+function parsePriority(raw: unknown, fallback: PriorityValue = "medium"): PriorityValue {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  return PRIORITY_VALUES.includes(v as PriorityValue) ? (v as PriorityValue) : fallback;
+}
+
+function parseColor(raw: unknown): ColorValue | null {
+  const v = typeof raw === "string" ? raw.trim().toLowerCase() : "";
+  return COLOR_VALUES.includes(v as ColorValue) ? (v as ColorValue) : null;
+}
+
+function parseProgress(raw: unknown, fallback = 0): number {
+  const n = typeof raw === "number" ? raw : Number(raw);
+  if (!Number.isFinite(n)) return fallback;
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
 
 function parseDateParam(v: string | null): string | null {
   if (!v) return null;
@@ -65,10 +86,14 @@ export async function POST(req: NextRequest) {
     notes = body.notes.trim().slice(0, NOTES_MAX);
   }
 
+  const priority = parsePriority(body.priority, "medium");
+  const color = parseColor(body.color) ?? null;
+  const progress_percent = parseProgress(body.progress_percent, 0);
+
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
     .from("daily_tasks")
-    .insert({ title, origin_date, notes })
+    .insert({ title, origin_date, notes, priority, color, progress_percent })
     .select("*")
     .single();
 
@@ -96,9 +121,12 @@ export async function PATCH(req: NextRequest) {
 
   const hasCompletion = "completed_on_date" in body;
   const hasNotes = "notes" in body;
-  if (!hasCompletion && !hasNotes) {
+  const hasPriority = "priority" in body;
+  const hasColor = "color" in body;
+  const hasProgress = "progress_percent" in body;
+  if (!hasCompletion && !hasNotes && !hasPriority && !hasColor && !hasProgress) {
     return NextResponse.json(
-      { error: "Provide completed_on_date and/or notes" },
+      { error: "Provide completed_on_date, notes, priority, color, and/or progress_percent" },
       { status: 400 }
     );
   }
@@ -129,6 +157,21 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  let priority: PriorityValue | undefined;
+  if (hasPriority) {
+    priority = parsePriority(body.priority as string | undefined);
+  }
+
+  let color: ColorValue | null | undefined;
+  if (hasColor) {
+    color = parseColor(body.color);
+  }
+
+  let progress_percent: number | undefined;
+  if (hasProgress) {
+    progress_percent = parseProgress(body.progress_percent);
+  }
+
   const supabase = getSupabaseAdmin();
 
   const { data: existing, error: fetchErr } = await supabase
@@ -152,6 +195,9 @@ export async function PATCH(req: NextRequest) {
   const updateRow: Record<string, unknown> = {};
   if (hasCompletion) updateRow.completed_on_date = completed_on_date;
   if (hasNotes) updateRow.notes = notes;
+  if (hasPriority && priority) updateRow.priority = priority;
+  if (hasColor) updateRow.color = color;
+  if (hasProgress && typeof progress_percent === "number") updateRow.progress_percent = progress_percent;
 
   const { data, error } = await supabase
     .from("daily_tasks")

@@ -1,4 +1,4 @@
-import type { DailyTask, DailyTaskView } from "./daily-task-types";
+import type { DailyTask, DailyTaskView, DailyTaskPriority } from "./daily-task-types";
 
 /**
  * Whether a task row should appear on calendar day `viewDate` (YYYY-MM-DD, calendar / wall-clock day, no TZ math).
@@ -29,10 +29,23 @@ export function toTaskViewsForDate(tasks: DailyTask[], viewDate: string): DailyT
       is_carried_over: pending && t.origin_date < viewDate,
     });
   }
+  const PRIORITY_WEIGHT: Record<DailyTaskPriority, number> = {
+    critical: 0,
+    high: 1,
+    medium: 2,
+    low: 3,
+  };
   out.sort((a, b) => {
+    // 1) Incomplete first
     if (a.is_completed !== b.is_completed) return a.is_completed ? 1 : -1;
+    // 2) Higher priority first
+    const pa = PRIORITY_WEIGHT[a.priority];
+    const pb = PRIORITY_WEIGHT[b.priority];
+    if (pa !== pb) return pa - pb;
+    // 3) Older origin_date first (rollover order)
     const od = a.origin_date.localeCompare(b.origin_date);
     if (od !== 0) return od;
+    // 4) Stable by created_at then id
     const ct = a.created_at.localeCompare(b.created_at);
     if (ct !== 0) return ct;
     return a.id.localeCompare(b.id);

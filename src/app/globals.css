@@ -6,16 +6,9 @@ html {
   height: 100%;
 }
 
-/* App shell routes are light-themed (dashboard tokens). Do not follow OS dark mode here —
-   it was flipping body fg/bg and clashing with bg-dashboard-* / text-dashboard-*. */
 :root {
-  color-scheme: light;
   --background: #ffffff;
   --foreground: #171717;
-}
-
-html {
-  color-scheme: light;
 }
 
 body {
@@ -23,6 +16,11 @@ body {
   color: var(--foreground);
   background: var(--background);
   font-family: var(--font-inter), Inter, system-ui, sans-serif;
+}
+
+/* Dashboard shell is intentionally light-themed regardless of OS preference. */
+.dashboard-theme {
+  color-scheme: light;
 }
 
 @layer utilities {

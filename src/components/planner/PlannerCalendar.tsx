@@ -17,7 +17,7 @@ import {
   PEOPLE_LEAVE_BORDER_COLOR,
 } from "@/lib/planner-constants";
 import { getCrewColor } from "@/lib/planner-constants";
-import { format, startOfDay, startOfWeek } from "date-fns";
+import { addDays, eachDayOfInterval, format, startOfDay, startOfWeek } from "date-fns";
 import { addDaysDateOnly, subDaysDateOnly } from "@/lib/planner-date";
 import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import { getWaPublicHolidayName } from "@/lib/wa-public-holidays";
@@ -40,6 +40,18 @@ interface PlannerCalendarProps {
   onActivityMove: (payload: UpdateActivityPayload) => void | Promise<boolean>;
   onDateSelect: (startDate: string, endDate: string) => void;
   peopleLeaves?: PlannerPeopleLeave[];
+}
+
+const SEGMENT_SEPARATOR = "::seg::";
+
+function allowsWeekendWork(act: PlannerActivity): boolean {
+  const notes = (act.notes ?? "").toLowerCase();
+  return notes.includes("[weekend]") || notes.includes("weekend work");
+}
+
+function activityBaseId(eventId: string): string {
+  const idx = eventId.indexOf(SEGMENT_SEPARATOR);
+  return idx >= 0 ? eventId.slice(0, idx) : eventId;
 }
 
 export default function PlannerCalendar({
@@ -89,19 +101,59 @@ export default function PlannerCalendar({
       const crew = crewMap.get(act.crew_id);
       const statusColor = ACTIVITY_STATUS_COLORS[act.status] ?? ACTIVITY_STATUS_COLORS.planned;
       const crewColor = crew ? getCrewColor(crew.index) : "#6B7280";
-
-      out.push({
-        id: act.id,
-        title: act.name,
-        start: act.start_date,
-        end: addDaysDateOnly(act.end_date, 1),
-        allDay: true,
-        backgroundColor: statusColor,
-        borderColor: crewColor,
-        borderWidth: "3px",
-        textColor: "#ffffff",
-        extendedProps: { activity: act },
+      const allowWeekend = allowsWeekendWork(act);
+      const days = eachDayOfInterval({
+        start: new Date(`${act.start_date}T12:00:00`),
+        end: new Date(`${act.end_date}T12:00:00`),
       });
+      let segStart: Date | null = null;
+      let lastWorking: Date | null = null;
+      let segIdx = 0;
+      let segmented = false;
+      for (const d of days) {
+        const ds = format(d, "yyyy-MM-dd");
+        const weekend = d.getDay() === 0 || d.getDay() === 6;
+        const holiday = Boolean(getWaPublicHolidayName(ds));
+        const blocked = holiday || (!allowWeekend && weekend);
+        if (blocked) {
+          if (segStart) {
+            segmented = true;
+            out.push({
+              id: `${act.id}${SEGMENT_SEPARATOR}${segIdx++}`,
+              title: act.name,
+              start: format(segStart, "yyyy-MM-dd"),
+              end: format(d, "yyyy-MM-dd"),
+              allDay: true,
+              editable: false,
+              backgroundColor: statusColor,
+              borderColor: crewColor,
+              borderWidth: "3px",
+              textColor: "#ffffff",
+              extendedProps: { activity: act, segmented: true },
+            });
+            segStart = null;
+          }
+          continue;
+        }
+        if (!segStart) segStart = d;
+        lastWorking = d;
+      }
+      if (segStart) {
+        const segEndExclusive = addDays(lastWorking ?? segStart, 1);
+        out.push({
+          id: segmented ? `${act.id}${SEGMENT_SEPARATOR}${segIdx}` : act.id,
+          title: act.name,
+          start: format(segStart, "yyyy-MM-dd"),
+          end: format(segEndExclusive, "yyyy-MM-dd"),
+          allDay: true,
+          editable: !segmented,
+          backgroundColor: statusColor,
+          borderColor: crewColor,
+          borderWidth: "3px",
+          textColor: "#ffffff",
+          extendedProps: { activity: act, segmented },
+        });
+      }
     }
     for (const lv of peopleLeaves) {
       const title = lv.person_name?.trim() ? `Leave: ${lv.person_name.trim()}` : "Leave";
@@ -140,12 +192,16 @@ export default function PlannerCalendar({
       info.revert();
       return;
     }
+    if (info.event.extendedProps.segmented) {
+      info.revert();
+      return;
+    }
     const activity = info.event.extendedProps.activity as PlannerActivity;
     const newStart = info.event.startStr;
     const newEnd = subDaysDateOnly(info.event.endStr || info.event.startStr, 1);
 
     onActivityMove({
-      id: activity.id,
+      id: activityBaseId(activity.id),
       start_date: newStart,
       end_date: newEnd,
     });
@@ -156,11 +212,15 @@ export default function PlannerCalendar({
       info.revert();
       return;
     }
+    if (info.event.extendedProps.segmented) {
+      info.revert();
+      return;
+    }
     const activity = info.event.extendedProps.activity as PlannerActivity;
     const newEnd = subDaysDateOnly(info.event.endStr || info.event.startStr, 1);
 
     onActivityMove({
-      id: activity.id,
+      id: activityBaseId(activity.id),
       end_date: newEnd,
     });
   };

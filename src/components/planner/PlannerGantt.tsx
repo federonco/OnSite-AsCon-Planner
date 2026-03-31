@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { format } from "date-fns";
+import { eachDayOfInterval, format } from "date-fns";
 import { Gantt, Task, ViewMode } from "gantt-task-react";
 import { PlannerActivity, PlannerPeopleLeave, UpdateActivityPayload } from "@/lib/planner-types";
 import { calendarSpanInclusiveDays, parseDateOnlyLocal } from "@/lib/planner-date";
@@ -12,6 +12,7 @@ import {
   PEOPLE_LEAVE_BORDER_COLOR,
 } from "@/lib/planner-constants";
 import { cn } from "@/lib/cn";
+import { getWaPublicHolidayName } from "@/lib/wa-public-holidays";
 
 interface CrewInfo {
   id: string;
@@ -36,6 +37,7 @@ interface PlannerGanttProps {
 }
 
 const LEAVE_TASK_PREFIX = "leave-";
+const HOL_SEG_PREFIX = "::hseg::";
 
 function isLeaveTaskId(taskId: string): boolean {
   return taskId.startsWith(LEAVE_TASK_PREFIX);
@@ -43,6 +45,11 @@ function isLeaveTaskId(taskId: string): boolean {
 
 function leaveRowId(leaveId: string): string {
   return `${LEAVE_TASK_PREFIX}${leaveId}`;
+}
+
+function baseActivityId(taskId: string): string {
+  const idx = taskId.indexOf(HOL_SEG_PREFIX);
+  return idx >= 0 ? taskId.slice(0, idx) : taskId;
 }
 
 /** Matches gantt-task-react@0.3.9 dist/index.css (global). */
@@ -245,24 +252,63 @@ export default function PlannerGantt({
       for (const { act, start, end } of groupRows) {
         const statusColor =
           ACTIVITY_STATUS_COLORS[act.status] ?? ACTIVITY_STATUS_COLORS.planned;
-        const taskStart = new Date(start);
-        const taskEnd = new Date(end);
         const progress = safeProgress(act.progress_percent);
-        result.push({
-          id: act.id,
-          name: act.name || "Untitled",
-          start: taskStart,
-          end: taskEnd,
-          progress,
-          type: "task",
-          project: `crew-${crewId}`,
-          styles: {
-            backgroundColor: statusColor,
-            progressColor: adjustColor(statusColor, -30),
-            progressSelectedColor: adjustColor(statusColor, -50),
-            backgroundSelectedColor: adjustColor(statusColor, -20),
-          },
-        });
+        const intervalDays = eachDayOfInterval({ start: new Date(start), end: new Date(end) });
+        let segStart: Date | null = null;
+        let segCount = 0;
+        for (const day of intervalDays) {
+          const ymd = format(day, "yyyy-MM-dd");
+          const isHoliday = Boolean(getWaPublicHolidayName(ymd));
+          if (isHoliday) {
+            if (segStart) {
+              const segEnd = new Date(day);
+              segEnd.setDate(segEnd.getDate() - 1);
+              segEnd.setHours(23, 59, 59, 999);
+              result.push({
+                id: `${act.id}${HOL_SEG_PREFIX}${segCount}`,
+                name: segCount === 0 ? act.name || "Untitled" : "↳",
+                start: new Date(segStart),
+                end: segEnd,
+                progress,
+                type: "task",
+                project: `crew-${crewId}`,
+                isDisabled: true,
+                styles: {
+                  backgroundColor: statusColor,
+                  progressColor: adjustColor(statusColor, -30),
+                  progressSelectedColor: adjustColor(statusColor, -50),
+                  backgroundSelectedColor: adjustColor(statusColor, -20),
+                },
+              });
+              segCount += 1;
+              segStart = null;
+            }
+            continue;
+          }
+          if (!segStart) {
+            segStart = new Date(day);
+            segStart.setHours(0, 0, 0, 0);
+          }
+        }
+        if (segStart) {
+          const segEnd = new Date(end);
+          result.push({
+            id: `${act.id}${HOL_SEG_PREFIX}${segCount}`,
+            name: segCount === 0 ? act.name || "Untitled" : "↳",
+            start: new Date(segStart),
+            end: segEnd,
+            progress,
+            type: "task",
+            project: `crew-${crewId}`,
+            isDisabled: true,
+            styles: {
+              backgroundColor: statusColor,
+              progressColor: adjustColor(statusColor, -30),
+              progressSelectedColor: adjustColor(statusColor, -50),
+              backgroundSelectedColor: adjustColor(statusColor, -20),
+            },
+          });
+        }
       }
 
       for (const lv of crewLeaveList) {
@@ -347,7 +393,7 @@ export default function PlannerGantt({
             </div>
           );
         }
-        const act = activities.find((a) => a.id === task.id);
+        const act = activities.find((a) => a.id === baseActivityId(String(task.id)));
         if (!act) {
           return (
             <div
@@ -384,7 +430,7 @@ export default function PlannerGantt({
     (task: Task) => {
       if (task.type === "project") return;
       if (isLeaveTaskId(String(task.id))) return;
-      const activity = activities.find((a) => a.id === task.id);
+      const activity = activities.find((a) => a.id === baseActivityId(String(task.id)));
       if (activity) onActivityClick(activity);
     },
     [activities, onActivityClick]
@@ -401,7 +447,7 @@ export default function PlannerGantt({
       if (!onActivityMove || task.type === "project") return false;
       if (isLeaveTaskId(String(task.id))) return false;
       const payload: UpdateActivityPayload = {
-        id: task.id,
+        id: baseActivityId(String(task.id)),
         start_date: format(task.start, "yyyy-MM-dd"),
         end_date: format(task.end, "yyyy-MM-dd"),
       };
@@ -415,7 +461,7 @@ export default function PlannerGantt({
       if (!onActivityMove || task.type === "project") return false;
       if (isLeaveTaskId(String(task.id))) return false;
       return onActivityMove({
-        id: task.id,
+        id: baseActivityId(String(task.id)),
         progress_percent: Math.min(100, Math.max(0, Math.round(task.progress))),
       });
     },
@@ -430,7 +476,7 @@ export default function PlannerGantt({
           onGanttSelect(null);
           return;
         }
-        const activity = activities.find((a) => a.id === task.id);
+        const activity = activities.find((a) => a.id === baseActivityId(String(task.id)));
         onGanttSelect(activity ?? null);
       } else {
         onGanttSelect(null);
@@ -472,8 +518,13 @@ export default function PlannerGantt({
     const bodyH = Math.max(100, chartBox.height - calendarHeaderH - horizontalScrollReserve);
     const rowHeight = n === 0 ? 36 : Math.max(22, Math.min(50, Math.floor(bodyH / n)));
     const ganttHeight = n === 0 ? bodyH : rowHeight * n;
-    const weekCols = weekColumnCount(tasks, GANTT_PRE_STEPS_WEEK);
-    const columnWidth = Math.max(24, Math.floor(chartW / Math.max(weekCols, 1)));
+    // Scale timeline density from the 2W/4W/6W/8W selector.
+    // Lower horizon => wider week columns; higher horizon => denser weeks.
+    const horizonWeeks = Math.max(2, Number(horizon) || 4);
+    const horizonCols = horizonWeeks + GANTT_PRE_STEPS_WEEK + 2; // +buffer weeks
+    const taskRangeCols = weekColumnCount(tasks, GANTT_PRE_STEPS_WEEK);
+    const targetCols = Math.max(horizonCols, Math.min(taskRangeCols, horizonCols + 4));
+    const columnWidth = Math.max(18, Math.floor(chartW / Math.max(targetCols, 1)));
     return {
       listCellPx,
       rowHeight,
@@ -482,7 +533,7 @@ export default function PlannerGantt({
       headerHeight: calendarHeaderH,
       fontSize: rowHeight < 34 ? "12px" : "13px",
     };
-  }, [chartBox.height, chartBox.width, tasks]);
+  }, [chartBox.height, chartBox.width, tasks, horizon]);
 
   const viewDate = useMemo(() => {
     void horizon;
@@ -530,10 +581,14 @@ export default function PlannerGantt({
         </span>
         <span className="inline-flex items-center gap-1.5">
           <span
-            className="h-2.5 w-4 shrink-0 rounded-sm border border-dashboard-border/60"
-            style={{ backgroundColor: PEOPLE_LEAVE_BAR_COLOR }}
+            className="relative h-2.5 w-4 shrink-0 overflow-hidden rounded-sm border border-dashboard-border/60 bg-violet-100"
             aria-hidden
-          />
+          >
+            <span
+              className="absolute inset-x-0 bottom-0 h-[2px]"
+              style={{ backgroundColor: PEOPLE_LEAVE_BAR_COLOR }}
+            />
+          </span>
           Purple — People leave
         </span>
       </div>

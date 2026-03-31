@@ -6,6 +6,11 @@ CREATE TABLE IF NOT EXISTS daily_tasks (
   title text NOT NULL,
   origin_date date NOT NULL,
   completed_on_date date NULL,
+  -- Optional visual identity token for the task row (e.g. 'blue', 'green', 'orange').
+  color text,
+  -- Priority bucket for planning: low, medium, high, critical.
+  priority text,
+  progress_percent integer DEFAULT 0,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT daily_tasks_title_length CHECK (char_length(trim(title)) > 0),
@@ -51,3 +56,11 @@ CREATE POLICY "Anyone can update daily tasks"
 
 CREATE POLICY "Anyone can delete daily tasks"
   ON daily_tasks FOR DELETE USING (true);
+
+-- Optional per-task comments (applied via migration daily_tasks_add_notes on existing DBs)
+ALTER TABLE daily_tasks ADD COLUMN IF NOT EXISTS notes text;
+
+-- New fields for color identity + priority. Existing rows default to NULL and are derived in mapper/UI.
+ALTER TABLE daily_tasks ADD COLUMN IF NOT EXISTS color text;
+ALTER TABLE daily_tasks ADD COLUMN IF NOT EXISTS priority text;
+ALTER TABLE daily_tasks ADD COLUMN IF NOT EXISTS progress_percent integer DEFAULT 0;
