@@ -1,5 +1,5 @@
-import type { ActivityStatus, PlannerActivity } from "./planner-types";
-import { ACTIVITY_STATUSES } from "./planner-types";
+import type { ActivityStatus, DependencyType, PlannerActivity } from "./planner-types";
+import { ACTIVITY_STATUSES, DEPENDENCY_TYPES } from "./planner-types";
 import { calendarSpanInclusiveDays, isValidDateOnlyString, toDateOnly } from "./planner-date";
 
 function asStatus(v: unknown): ActivityStatus {
@@ -13,6 +13,13 @@ function clampProgress(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function asDependencyType(v: unknown): DependencyType | null {
+  if (typeof v === "string" && (DEPENDENCY_TYPES as readonly string[]).includes(v)) {
+    return v as DependencyType;
+  }
+  return null;
 }
 
 /**
@@ -60,6 +67,10 @@ export function mapRowToPlannerActivity(row: Record<string, unknown>): PlannerAc
     wbs_code: row.wbs_code != null ? String(row.wbs_code) : null,
     is_baseline: Boolean(row.is_baseline),
     parent_activity_id: row.parent_activity_id != null ? String(row.parent_activity_id) : null,
+    predecessor_id: row.predecessor_id != null ? String(row.predecessor_id) : null,
+    dependency_type: asDependencyType(row.dependency_type),
+    dependency_lag_days:
+      row.dependency_lag_days == null ? null : Number.isFinite(Number(row.dependency_lag_days)) ? Number(row.dependency_lag_days) : null,
     sort_order: typeof row.sort_order === "number" ? row.sort_order : Number(row.sort_order) || 0,
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),

@@ -22,6 +22,7 @@ interface Crew {
 
 interface ActivityFormProps {
   activity: PlannerActivity | null;
+  activities: PlannerActivity[];
   crews: Crew[];
   defaultCrewId?: string | null;
   defaultDate?: string | null;
@@ -34,6 +35,7 @@ interface ActivityFormProps {
 
 export default function ActivityForm({
   activity,
+  activities,
   crews,
   defaultCrewId,
   defaultDate,
@@ -57,6 +59,14 @@ export default function ActivityForm({
   const [drainerSectionId, setDrainerSectionId] = useState(
     () => activity?.drainer_section_id ?? defaultSectionId ?? ""
   );
+  const [predecessorId, setPredecessorId] = useState(activity?.predecessor_id ?? "");
+  const [linkMode, setLinkMode] = useState<"none" | "after" | "parallel" | "start_after_start">(() => {
+    if (!activity?.dependency_type || !activity.predecessor_id) return "none";
+    if (activity.dependency_type === "FS") return "after";
+    if ((activity.dependency_lag_days ?? 0) > 0) return "start_after_start";
+    return "parallel";
+  });
+  const [linkLagDays, setLinkLagDays] = useState(Math.max(0, activity?.dependency_lag_days ?? 1));
   const [sectionOptions, setSectionOptions] = useState<DrainerSectionListItem[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
@@ -119,6 +129,14 @@ export default function ActivityForm({
     return { calendarDays, waWorking };
   }, [startDate, endDate]);
 
+  const predecessorOptions = useMemo(
+    () =>
+      activities
+        .filter((a) => a.id !== activity?.id)
+        .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name)),
+    [activities, activity?.id]
+  );
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
@@ -147,11 +165,18 @@ export default function ActivityForm({
       setSaveError("Section is required.");
       return;
     }
+    if (linkMode !== "none" && !predecessorId) {
+      setSaveError("Select a predecessor task for the selected link mode.");
+      return;
+    }
 
     setSaving(true);
     setSaveError(null);
     try {
       if (isEditing) {
+        const depType =
+          linkMode === "none" ? null : linkMode === "after" ? "FS" : "SS";
+        const depLag = linkMode === "start_after_start" ? Math.max(0, Math.round(linkLagDays)) : 0;
         const payload: UpdateActivityPayload = {
           id: activity!.id,
           name: name.trim(),
@@ -162,9 +187,15 @@ export default function ActivityForm({
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
           drainer_section_id: drainerSectionId.trim(),
+          predecessor_id: linkMode === "none" ? null : predecessorId || null,
+          dependency_type: depType,
+          dependency_lag_days: depType ? depLag : null,
         };
         await onSave(payload);
       } else {
+        const depType =
+          linkMode === "none" ? null : linkMode === "after" ? "FS" : "SS";
+        const depLag = linkMode === "start_after_start" ? Math.max(0, Math.round(linkLagDays)) : 0;
         const payload: CreateActivityPayload = {
           crew_id: crewId,
           name: name.trim(),
@@ -175,6 +206,9 @@ export default function ActivityForm({
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
           drainer_section_id: drainerSectionId.trim(),
+          predecessor_id: linkMode === "none" ? null : predecessorId || null,
+          dependency_type: depType,
+          dependency_lag_days: depType ? depLag : null,
         };
         await onSave(payload);
       }
@@ -375,6 +409,53 @@ export default function ActivityForm({
               rows={3}
               className={`${inputClass} resize-none`}
             />
+          </div>
+
+          <div className="grid grid-cols-1 gap-3 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
+            <p className="text-dashboard-xs font-medium text-dashboard-text-secondary">Task link (Calendar + Gantt)</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Link mode</label>
+                <select
+                  value={linkMode}
+                  onChange={(e) => setLinkMode(e.target.value as "none" | "after" | "parallel" | "start_after_start")}
+                  className={inputClass}
+                >
+                  <option value="none">No link</option>
+                  <option value="after">Start after predecessor ends</option>
+                  <option value="parallel">Start in parallel</option>
+                  <option value="start_after_start">Start X days after predecessor starts</option>
+                </select>
+              </div>
+              <div>
+                <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Predecessor</label>
+                <select
+                  value={predecessorId}
+                  onChange={(e) => setPredecessorId(e.target.value)}
+                  disabled={linkMode === "none"}
+                  className={inputClass}
+                >
+                  <option value="">Select task…</option>
+                  {predecessorOptions.map((a) => (
+                    <option key={a.id} value={a.id}>
+                      {a.name} ({a.start_date})
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+            {linkMode === "start_after_start" && (
+              <div className="max-w-[160px]">
+                <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">X days</label>
+                <input
+                  type="number"
+                  min={0}
+                  value={linkLagDays}
+                  onChange={(e) => setLinkLagDays(Number(e.target.value) || 0)}
+                  className={inputClass}
+                />
+              </div>
+            )}
           </div>
 
           <div className="flex gap-3 pt-2">

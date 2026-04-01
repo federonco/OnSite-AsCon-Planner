@@ -546,6 +546,7 @@ export default function PlannerPage() {
         <ActivityForm
           key={selectedActivity?.id ?? `new-${defaultDate ?? ""}-${sectionFilter ?? ""}`}
           activity={selectedActivity}
+          activities={activities}
           crews={crewsForForms.length > 0 ? crewsForForms : crews}
           defaultCrewId={typeof onlyEnabledCrewId === "string" ? onlyEnabledCrewId : crewFilter}
           defaultDate={defaultDate}

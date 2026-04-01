@@ -27,6 +27,10 @@ export interface PlannerActivity {
   wbs_code: string | null;
   is_baseline: boolean;
   parent_activity_id: string | null;
+  /** Optional single predecessor link used by calendar/gantt linking UX. */
+  predecessor_id?: string | null;
+  dependency_type?: DependencyType | null;
+  dependency_lag_days?: number | null;
   sort_order: number;
   created_at: string;
   updated_at: string;
@@ -76,6 +80,9 @@ export interface CreateActivityPayload {
   parent_activity_id?: string | null;
   sort_order?: number;
   progress_percent?: number;
+  predecessor_id?: string | null;
+  dependency_type?: DependencyType | null;
+  dependency_lag_days?: number | null;
 }
 
 /** Payload for updating an activity (all fields optional except id) */
@@ -91,6 +98,9 @@ export interface UpdateActivityPayload {
   progress_percent?: number;
   drainer_section_id?: string | null;
   drainer_segment_id?: string | null;
+  predecessor_id?: string | null;
+  dependency_type?: DependencyType | null;
+  dependency_lag_days?: number | null;
 }
 
 /** Drainer progress summary for a section */
