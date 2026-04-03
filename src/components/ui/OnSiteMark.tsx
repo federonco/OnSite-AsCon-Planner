@@ -2,7 +2,7 @@ import Image from "next/image";
 import { cn } from "@/lib/cn";
 
 /**
- * Sidebar mark: `public/X.png` (URL `/X.png`). Next.js does not serve `src/lib/public/*`.
+ * Sidebar mark: `public/X.png` (URL `/X.png`).
  */
 export function OnSiteMark({ className }: { className?: string }) {
   return (

@@ -37,8 +37,7 @@ export function SiteFooter({
             rel="noreferrer"
             className="inline-flex items-center gap-1 align-middle -translate-y-[2px] underline-offset-2 hover:underline"
           >
-            {/* eslint-disable-next-line @next/next/no-img-element -- small raster wordmark */}
-            <img src="/readx-logo.png" alt="readX" className="h-[10px] w-auto" />
+            <span className="font-semibold tracking-tight">readX</span>
           </a>
         </div>
         <div>All Rights Reserved.</div>

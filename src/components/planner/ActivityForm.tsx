@@ -161,10 +161,6 @@ export default function ActivityForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim() || !crewId || !startDate || !endDate) return;
-    if (!drainerSectionId.trim()) {
-      setSaveError("Section is required.");
-      return;
-    }
     if (linkMode !== "none" && !predecessorId) {
       setSaveError("Select a predecessor task for the selected link mode.");
       return;
@@ -186,7 +182,7 @@ export default function ActivityForm({
           progress_percent: Math.min(100, Math.max(0, Math.round(progressPercent))),
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
-          drainer_section_id: drainerSectionId.trim(),
+          drainer_section_id: drainerSectionId.trim() || null,
           predecessor_id: linkMode === "none" ? null : predecessorId || null,
           dependency_type: depType,
           dependency_lag_days: depType ? depLag : null,
@@ -205,7 +201,7 @@ export default function ActivityForm({
           progress_percent: Math.min(100, Math.max(0, Math.round(progressPercent))),
           notes: notes.trim() || null,
           wbs_code: wbsCode.trim() || null,
-          drainer_section_id: drainerSectionId.trim(),
+          drainer_section_id: drainerSectionId.trim() || null,
           predecessor_id: linkMode === "none" ? null : predecessorId || null,
           dependency_type: depType,
           dependency_lag_days: depType ? depLag : null,
@@ -291,17 +287,16 @@ export default function ActivityForm({
           {crewId && (
             <div>
               <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">
-                Section *
+                Section (optional)
               </label>
               <select
                 value={drainerSectionId}
                 onChange={(e) => setDrainerSectionId(e.target.value)}
                 className={inputClass}
-                required
                 disabled={sectionsLoading || !!sectionsError}
               >
                 <option value="">
-                  {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "Select section…"}
+                  {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "No section"}
                 </option>
                 {sectionOptions.map((s) => (
                   <option key={s.id} value={s.id}>

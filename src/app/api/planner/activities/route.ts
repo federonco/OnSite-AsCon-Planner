@@ -189,15 +189,14 @@ export async function POST(req: NextRequest) {
 
   const { crew_id, name, start_date, end_date } = body;
   const sectionId =
-    body.drainer_section_id != null ? String(body.drainer_section_id).trim() : "";
+    body.drainer_section_id != null && String(body.drainer_section_id).trim() !== ""
+      ? String(body.drainer_section_id).trim()
+      : null;
   if (!crew_id || !name || !start_date || !end_date) {
     return NextResponse.json(
       { error: "crew_id, name, start_date, and end_date are required" },
       { status: 400 }
     );
-  }
-  if (!sectionId) {
-    return NextResponse.json({ error: "drainer_section_id is required" }, { status: 400 });
   }
 
   const rawProgress = Number(body.progress_percent);
@@ -279,19 +278,14 @@ export async function PUT(req: NextRequest) {
   const filtered: Record<string, unknown> = {};
   for (const key of allowed) {
     if (key in updates) {
-      filtered[key] = updates[key];
+      if (key === "drainer_section_id") {
+        const v = updates.drainer_section_id;
+        filtered[key] =
+          v == null || (typeof v === "string" && v.trim() === "") ? null : String(v).trim();
+      } else {
+        filtered[key] = updates[key];
+      }
     }
-  }
-
-  if (
-    "drainer_section_id" in filtered &&
-    (filtered.drainer_section_id == null ||
-      String(filtered.drainer_section_id).trim() === "")
-  ) {
-    return NextResponse.json(
-      { error: "drainer_section_id cannot be empty when provided" },
-      { status: 400 }
-    );
   }
 
   if (Object.keys(filtered).length === 0) {

@@ -21,6 +21,10 @@ body {
 /* Dashboard shell is intentionally light-themed regardless of OS preference. */
 .dashboard-theme {
   color-scheme: light;
+  --background: #f5f7fb;
+  --foreground: #1a1d2e;
+  background-color: #f5f7fb;
+  color: #1a1d2e;
 }
 
 @layer utilities {

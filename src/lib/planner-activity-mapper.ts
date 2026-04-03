@@ -24,14 +24,16 @@ function asDependencyType(v: unknown): DependencyType | null {
 
 /**
  * Normalize API/Supabase row into PlannerActivity. Single source of truth for dates/progress/status.
- * Returns null if the row cannot be shown (missing id/crew_id, drainer_section_id, or invalid start_date).
+ * Returns null if the row cannot be shown (missing id/crew_id, or invalid start_date).
  */
 export function mapRowToPlannerActivity(row: Record<string, unknown>): PlannerActivity | null {
   const id = String(row.id ?? "").trim();
   const crew_id = String(row.crew_id ?? "").trim();
   const drainer_section_id =
-    row.drainer_section_id != null ? String(row.drainer_section_id).trim() : "";
-  if (!id || !crew_id || !drainer_section_id) return null;
+    row.drainer_section_id != null && String(row.drainer_section_id).trim() !== ""
+      ? String(row.drainer_section_id).trim()
+      : null;
+  if (!id || !crew_id) return null;
 
   const startRaw = toDateOnly(String(row.start_date ?? ""));
   if (!isValidDateOnlyString(startRaw)) return null;
@@ -74,6 +76,10 @@ export function mapRowToPlannerActivity(row: Record<string, unknown>): PlannerAc
     sort_order: typeof row.sort_order === "number" ? row.sort_order : Number(row.sort_order) || 0,
     created_at: String(row.created_at ?? ""),
     updated_at: String(row.updated_at ?? ""),
+    import_meta:
+      row.import_meta != null && typeof row.import_meta === "object"
+        ? (row.import_meta as Record<string, unknown>)
+        : null,
   };
 }
 

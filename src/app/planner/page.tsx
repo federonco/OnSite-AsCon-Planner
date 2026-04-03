@@ -8,7 +8,6 @@ import {
   CreateActivityPayload,
   UpdateActivityPayload,
   HorizonWeeks,
-  type DrainerSectionListItem,
 } from "@/lib/planner-types";
 import {
   mapPlannerRowsFromApi,
@@ -18,7 +17,6 @@ import { mapRowToPlannerPeopleLeave } from "@/lib/planner-leave-mapper";
 import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import HorizonSelector from "@/components/planner/HorizonSelector";
 import CrewFilter from "@/components/planner/CrewFilter";
-import SectionFilter from "@/components/planner/SectionFilter";
 import { PLANNER_CREW_ROLLOUT_NAME } from "@/lib/planner-constants";
 import ActivityForm from "@/components/planner/ActivityForm";
 import ProjectImporter from "@/components/planner/ProjectImporter";
@@ -75,10 +73,6 @@ export default function PlannerPage() {
   const [showImporter, setShowImporter] = useState(false);
   const [viewMode, setViewMode] = useState<"calendar" | "gantt">("calendar");
   const [ganttSelected, setGanttSelected] = useState<PlannerActivity | null>(null);
-  const [sectionFilter, setSectionFilter] = useState<string | null>(null);
-  const [drainerSections, setDrainerSections] = useState<DrainerSectionListItem[]>([]);
-  const [sectionsLoading, setSectionsLoading] = useState(false);
-  const [sectionsFetchError, setSectionsFetchError] = useState<string | null>(null);
   const [crewsFetchError, setCrewsFetchError] = useState<string | null>(null);
   const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
   const [showLeaveQr, setShowLeaveQr] = useState(false);
@@ -119,68 +113,9 @@ export default function PlannerPage() {
     return crews;
   }, [crews, onlyEnabledCrewId]);
 
-  const crewIdForSections = useMemo(() => {
-    if (typeof onlyEnabledCrewId === "string") return onlyEnabledCrewId;
-    return crewFilter;
-  }, [onlyEnabledCrewId, crewFilter]);
+  const visibleActivities = activities;
 
-  useEffect(() => {
-    setSectionFilter(null);
-  }, [crewIdForSections]);
-
-  /** Drop section filter if the current id is not in the loaded list (stale controlled value breaks some browsers). */
-  useEffect(() => {
-    if (!sectionFilter) return;
-    if (drainerSections.length === 0) return;
-    if (!drainerSections.some((s) => s.id === sectionFilter)) {
-      setSectionFilter(null);
-    }
-  }, [drainerSections, sectionFilter]);
-
-  useEffect(() => {
-    if (!crewIdForSections) {
-      setDrainerSections([]);
-      setSectionsFetchError(null);
-      setSectionsLoading(false);
-      return;
-    }
-    let cancelled = false;
-    setSectionsLoading(true);
-    setSectionsFetchError(null);
-    (async () => {
-      try {
-        const res = await fetch(
-          `/api/planner/sections?crew_id=${encodeURIComponent(crewIdForSections)}`
-        );
-        const body = (await res.json()) as {
-          sections?: DrainerSectionListItem[];
-          error?: string;
-        };
-        if (!res.ok) throw new Error(body.error || res.statusText);
-        if (!cancelled) setDrainerSections(body.sections ?? []);
-      } catch (e) {
-        if (!cancelled) {
-          setSectionsFetchError(e instanceof Error ? e.message : "Failed to load sections");
-          setDrainerSections([]);
-        }
-      } finally {
-        if (!cancelled) setSectionsLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [crewIdForSections]);
-
-  const visibleActivities = useMemo(() => {
-    if (!sectionFilter) return activities;
-    return activities.filter((a) => a.drainer_section_id === sectionFilter);
-  }, [activities, sectionFilter]);
-
-  const visibleLeaves = useMemo(() => {
-    if (!sectionFilter || !crewIdForSections) return peopleLeaves;
-    return peopleLeaves.filter((l) => l.crew_id === crewIdForSections);
-  }, [crewIdForSections, peopleLeaves, sectionFilter]);
+  const visibleLeaves = peopleLeaves;
 
   const crewNameForQr = useMemo(() => {
     if (!crewIdForApi) return null;
@@ -457,14 +392,6 @@ export default function PlannerPage() {
                       </p>
                     )}
                   </div>
-                  <SectionFilter
-                    sections={drainerSections}
-                    value={sectionFilter}
-                    onChange={setSectionFilter}
-                    disabled={!crewIdForSections}
-                    loading={sectionsLoading}
-                    error={sectionsFetchError}
-                  />
                 </div>
               </div>
             }
@@ -475,7 +402,7 @@ export default function PlannerPage() {
                   onClick={() => setShowImporter(true)}
                   className="rounded-dashboard-md px-4 py-2.5 text-dashboard-sm font-medium text-dashboard-text-secondary transition-[background-color,color] duration-dashboard-fast hover:bg-dashboard-bg hover:text-dashboard-text-primary"
                 >
-                  Import XML
+                  Import XML / XER
                 </button>
                 <CreateEventButton onClick={handleNewActivity}>+ Activity</CreateEventButton>
                 <SettingsDropdown
@@ -544,13 +471,13 @@ export default function PlannerPage() {
 
       {showActivityForm && (
         <ActivityForm
-          key={selectedActivity?.id ?? `new-${defaultDate ?? ""}-${sectionFilter ?? ""}`}
+          key={selectedActivity?.id ?? `new-${defaultDate ?? ""}`}
           activity={selectedActivity}
           activities={activities}
           crews={crewsForForms.length > 0 ? crewsForForms : crews}
           defaultCrewId={typeof onlyEnabledCrewId === "string" ? onlyEnabledCrewId : crewFilter}
           defaultDate={defaultDate}
-          defaultSectionId={sectionFilter}
+          defaultSectionId={null}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => {

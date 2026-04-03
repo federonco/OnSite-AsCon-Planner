@@ -35,7 +35,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en">
+    <html lang="en" className="h-full">
       <body
         className={`${inter.variable} ${geistSans.variable} ${geistMono.variable} ${inter.className} min-h-screen antialiased`}
       >

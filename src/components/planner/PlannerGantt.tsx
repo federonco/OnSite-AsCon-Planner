@@ -73,72 +73,124 @@ function formatTooltipDay(d: Date): string {
   return format(d, "dd/MM/yyyy");
 }
 
-function PlannerTaskListTable({
-  rowHeight,
-  rowWidth,
+function PlannerTaskListHeader({
+  headerHeight,
   fontFamily,
   fontSize,
-  locale: _locale,
-  tasks,
-  selectedTaskId,
-  setSelectedTask: _setSelectedTask,
-  onExpanderClick,
+  nameWidthPx,
+  dateWidthPx,
 }: {
-  rowHeight: number;
+  headerHeight: number;
   rowWidth: string;
   fontFamily: string;
   fontSize: string;
-  locale: string;
-  tasks: Task[];
-  selectedTaskId: string;
-  setSelectedTask: (taskId: string) => void;
-  onExpanderClick: (task: Task) => void;
+  nameWidthPx: number;
+  dateWidthPx: number;
 }) {
-  void _locale;
-  void _setSelectedTask;
+  const nameW = `${nameWidthPx}px`;
+  const dateW = `${dateWidthPx}px`;
   return (
-    <div className={GTL.wrap} style={{ fontFamily, fontSize }}>
-      {tasks.map((t) => {
-        let expanderSymbol = "";
-        if (t.hideChildren === false) expanderSymbol = "▼";
-        else if (t.hideChildren === true) expanderSymbol = "▶";
-
-        return (
-          <div
-            className={cn(GTL.row, selectedTaskId === t.id && "ring-1 ring-inset ring-dashboard-primary/50")}
-            style={{ height: rowHeight }}
-            key={`${t.id}row`}
-          >
-            <div
-              className={GTL.cell}
-              style={{ minWidth: rowWidth, maxWidth: rowWidth }}
-              title={t.name}
-            >
-              <div className={GTL.nameWrap}>
-                <div className={expanderSymbol ? GTL.exp : GTL.expEmpty} onClick={() => onExpanderClick(t)}>
-                  {expanderSymbol}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <div className="truncate">{t.name}</div>
-                  {t.type === "task" && !isLeaveTaskId(String(t.id)) && (
-                    <div className="text-[11px] font-medium tabular-nums text-dashboard-text-muted">
-                      {Math.round(t.progress)}% complete
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className={GTL.cell} style={{ minWidth: rowWidth, maxWidth: rowWidth }}>
-              &nbsp;{formatTaskListDate(t.start)}
-            </div>
-            <div className={GTL.cell} style={{ minWidth: rowWidth, maxWidth: rowWidth }}>
-              &nbsp;{formatTaskListDate(t.end)}
-            </div>
-          </div>
-        );
-      })}
+    <div
+      className="flex shrink-0 border-b border-dashboard-border/80 bg-dashboard-surface/95 text-dashboard-xs font-medium text-dashboard-text-secondary"
+      style={{ fontFamily, fontSize, height: headerHeight - 2 }}
+    >
+      <div className="flex items-center px-2" style={{ minWidth: nameW, width: nameW }}>
+        &nbsp;Name
+      </div>
+      <div
+        className="w-px shrink-0 bg-dashboard-border"
+        style={{ height: headerHeight * 0.5, marginTop: headerHeight * 0.2 }}
+        aria-hidden
+      />
+      <div className="flex items-center px-2" style={{ minWidth: dateW, width: dateW }}>
+        &nbsp;From
+      </div>
+      <div
+        className="w-px shrink-0 bg-dashboard-border"
+        style={{ height: headerHeight * 0.5, marginTop: headerHeight * 0.25 }}
+        aria-hidden
+      />
+      <div className="flex items-center px-2" style={{ minWidth: dateW, width: dateW }}>
+        &nbsp;To
+      </div>
     </div>
   );
+}
+
+function createPlannerTaskListTable(nameWidthPx: number, dateWidthPx: number) {
+  const nameW = `${nameWidthPx}px`;
+  const dateW = `${dateWidthPx}px`;
+
+  return function PlannerTaskListTable({
+    rowHeight,
+    rowWidth: _rowWidth,
+    fontFamily,
+    fontSize,
+    locale: _locale,
+    tasks,
+    selectedTaskId,
+    setSelectedTask: _setSelectedTask,
+    onExpanderClick,
+  }: {
+    rowHeight: number;
+    rowWidth: string;
+    fontFamily: string;
+    fontSize: string;
+    locale: string;
+    tasks: Task[];
+    selectedTaskId: string;
+    setSelectedTask: (taskId: string) => void;
+    onExpanderClick: (task: Task) => void;
+  }) {
+    void _locale;
+    void _setSelectedTask;
+    void _rowWidth;
+    return (
+      <div className={GTL.wrap} style={{ fontFamily, fontSize }}>
+        {tasks.map((t) => {
+          let expanderSymbol = "";
+          if (t.hideChildren === false) expanderSymbol = "▼";
+          else if (t.hideChildren === true) expanderSymbol = "▶";
+
+          return (
+            <div
+              className={cn(GTL.row, selectedTaskId === t.id && "ring-1 ring-inset ring-dashboard-primary/50")}
+              style={{ height: rowHeight }}
+              key={`${t.id}row`}
+            >
+              <div
+                className={GTL.cell}
+                style={{ minWidth: nameW, maxWidth: nameW, width: nameW }}
+                title={t.name}
+              >
+                <div className={GTL.nameWrap}>
+                  <div className={expanderSymbol ? GTL.exp : GTL.expEmpty} onClick={() => onExpanderClick(t)}>
+                    {expanderSymbol}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-dashboard-text-primary" title={t.name}>
+                      {t.name}
+                    </div>
+                    {t.type === "task" && !isLeaveTaskId(String(t.id)) && (
+                      <div className="text-[11px] font-medium tabular-nums text-dashboard-text-muted">
+                        {Math.round(t.progress)}% complete
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              <div className={GTL.cell} style={{ minWidth: dateW, maxWidth: dateW, width: dateW }}>
+                &nbsp;{formatTaskListDate(t.start)}
+              </div>
+              <div className={GTL.cell} style={{ minWidth: dateW, maxWidth: dateW, width: dateW }}>
+                &nbsp;{formatTaskListDate(t.end)}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    );
+  };
 }
 
 export default function PlannerGantt({
@@ -253,6 +305,9 @@ export default function PlannerGantt({
         const statusColor =
           ACTIVITY_STATUS_COLORS[act.status] ?? ACTIVITY_STATUS_COLORS.planned;
         const progress = safeProgress(act.progress_percent);
+        const baseLabel = act.name?.trim() || "Untitled";
+        const segLabel = (segIndex: number) =>
+          segIndex === 0 ? baseLabel : `↳ ${baseLabel}`;
         const intervalDays = eachDayOfInterval({ start: new Date(start), end: new Date(end) });
         let segStart: Date | null = null;
         let segCount = 0;
@@ -266,7 +321,7 @@ export default function PlannerGantt({
               segEnd.setHours(23, 59, 59, 999);
               result.push({
                 id: `${act.id}${HOL_SEG_PREFIX}${segCount}`,
-                name: segCount === 0 ? act.name || "Untitled" : "↳",
+                name: segLabel(segCount),
                 start: new Date(segStart),
                 end: segEnd,
                 progress,
@@ -294,7 +349,7 @@ export default function PlannerGantt({
           const segEnd = new Date(end);
           result.push({
             id: `${act.id}${HOL_SEG_PREFIX}${segCount}`,
-            name: segCount === 0 ? act.name || "Untitled" : "↳",
+            name: segLabel(segCount),
             start: new Date(segStart),
             end: segEnd,
             progress,
@@ -506,17 +561,19 @@ export default function PlannerGantt({
   }, []);
 
   const ganttLayout = useMemo(() => {
-    /** Timeline ~70% width; task list (3 columns) gets the remainder minus gap. */
+    /** Timeline ~58% width; task list gets wider Name + narrower From/To. */
     const gapPx = 16;
-    const chartTargetPx = Math.floor(chartBox.width * 0.7);
+    const chartTargetPx = Math.floor(chartBox.width * 0.58);
     const listTotalPx = Math.max(0, chartBox.width - chartTargetPx - gapPx);
-    const listCellPx = Math.max(48, Math.floor(listTotalPx / 3));
+    const dateColPx = Math.max(72, Math.min(100, Math.floor(listTotalPx * 0.2)));
+    const nameColPx = Math.max(180, listTotalPx - 2 * dateColPx);
+    const listTotalWidthPx = nameColPx + 2 * dateColPx;
     const calendarHeaderH = 50;
     const horizontalScrollReserve = 20;
     const n = tasks.length;
     const chartW = Math.max(160, chartTargetPx);
     const bodyH = Math.max(100, chartBox.height - calendarHeaderH - horizontalScrollReserve);
-    const rowHeight = n === 0 ? 36 : Math.max(22, Math.min(50, Math.floor(bodyH / n)));
+    const rowHeight = n === 0 ? 36 : Math.max(26, Math.min(50, Math.floor(bodyH / n)));
     const ganttHeight = n === 0 ? bodyH : rowHeight * n;
     // Scale timeline density from the 2W/4W/6W/8W selector.
     // Lower horizon => wider week columns; higher horizon => denser weeks.
@@ -526,7 +583,9 @@ export default function PlannerGantt({
     const targetCols = Math.max(horizonCols, Math.min(taskRangeCols, horizonCols + 4));
     const columnWidth = Math.max(18, Math.floor(chartW / Math.max(targetCols, 1)));
     return {
-      listCellPx,
+      nameColPx,
+      dateColPx,
+      listTotalWidthPx,
       rowHeight,
       ganttHeight,
       columnWidth,
@@ -539,6 +598,30 @@ export default function PlannerGantt({
     void horizon;
     return new Date();
   }, [horizon]);
+
+  const TaskListTableComponent = useMemo(
+    () => createPlannerTaskListTable(ganttLayout.nameColPx, ganttLayout.dateColPx),
+    [ganttLayout.nameColPx, ganttLayout.dateColPx]
+  );
+
+  const TaskListHeaderComponent = useMemo(() => {
+    const nw = ganttLayout.nameColPx;
+    const dw = ganttLayout.dateColPx;
+    return function BoundPlannerTaskListHeader(props: {
+      headerHeight: number;
+      rowWidth: string;
+      fontFamily: string;
+      fontSize: string;
+    }) {
+      return (
+        <PlannerTaskListHeader
+          {...props}
+          nameWidthPx={nw}
+          dateWidthPx={dw}
+        />
+      );
+    };
+  }, [ganttLayout.nameColPx, ganttLayout.dateColPx]);
 
   if (tasks.length === 0) {
     return (
@@ -594,7 +677,7 @@ export default function PlannerGantt({
       </div>
       <div ref={chartMountRef} className="min-h-0 min-w-0 flex-1 overflow-hidden">
         <Gantt
-          key={`${horizon}-${ganttLayout.rowHeight}-${ganttLayout.columnWidth}-${ganttLayout.listCellPx}`}
+          key={`${horizon}-${ganttLayout.rowHeight}-${ganttLayout.columnWidth}-${ganttLayout.listTotalWidthPx}`}
           tasks={tasks}
           viewMode={ViewMode.Week}
           viewDate={viewDate}
@@ -605,7 +688,8 @@ export default function PlannerGantt({
           headerHeight={ganttLayout.headerHeight}
           fontSize={ganttLayout.fontSize}
           barFill={56}
-          TaskListTable={PlannerTaskListTable}
+          TaskListHeader={TaskListHeaderComponent}
+          TaskListTable={TaskListTableComponent}
           TooltipContent={TooltipContent}
           onClick={openActivity}
           onDoubleClick={openActivity}
@@ -613,7 +697,7 @@ export default function PlannerGantt({
           onExpanderClick={handleExpanderClick}
           onDateChange={onActivityMove ? handleDateChange : undefined}
           onProgressChange={onActivityMove ? handleProgressChange : undefined}
-          listCellWidth={`${ganttLayout.listCellPx}px`}
+          listCellWidth={`${ganttLayout.listTotalWidthPx}px`}
           barCornerRadius={4}
           todayColor="rgba(59, 139, 212, 0.15)"
           projectBackgroundColor="#374151"
