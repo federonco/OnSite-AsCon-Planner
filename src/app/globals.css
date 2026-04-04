@@ -25,6 +25,8 @@ body {
   --foreground: #1a1d2e;
   background-color: #f5f7fb;
   color: #1a1d2e;
+  /* Isolate stacking; avoid flex/scroll quirks collapsing the shell */
+  isolation: isolate;
 }
 
 @layer utilities {

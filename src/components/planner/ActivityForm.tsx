@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { IconButton } from "@/components/ui/IconButton";
 import {
   PlannerActivity,
   CreateActivityPayload,
@@ -14,6 +15,14 @@ const STATUS_PICKER_OPTIONS = ACTIVITY_STATUSES.filter((s) => s !== "blocked");
 import { ACTIVITY_STATUS_COLORS, ACTIVITY_STATUS_LABELS } from "@/lib/planner-constants";
 import { countWaWorkingDaysInclusive } from "@/lib/wa-public-holidays";
 import { differenceInCalendarDays } from "date-fns";
+
+const kebabIcon = (
+  <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden>
+    <circle cx="12" cy="6" r="1.75" />
+    <circle cx="12" cy="12" r="1.75" />
+    <circle cx="12" cy="18" r="1.75" />
+  </svg>
+);
 
 interface Crew {
   id: string;
@@ -70,6 +79,18 @@ export default function ActivityForm({
   const [sectionOptions, setSectionOptions] = useState<DrainerSectionListItem[]>([]);
   const [sectionsLoading, setSectionsLoading] = useState(false);
   const [sectionsError, setSectionsError] = useState<string | null>(null);
+  const [sectionListVersion, setSectionListVersion] = useState(0);
+  const [sectionKebabOpen, setSectionKebabOpen] = useState(false);
+  const [createSectionOpen, setCreateSectionOpen] = useState(false);
+  const [newSectionName, setNewSectionName] = useState("");
+  const [newSectionStartCh, setNewSectionStartCh] = useState("");
+  const [newSectionEndCh, setNewSectionEndCh] = useState("");
+  const [newSectionDirection, setNewSectionDirection] = useState<"onwards" | "backwards">("onwards");
+  const [newSectionProjectId, setNewSectionProjectId] = useState("");
+  const [newSectionItpNumber, setNewSectionItpNumber] = useState("");
+  const [creatingSection, setCreatingSection] = useState(false);
+  const [createSectionError, setCreateSectionError] = useState<string | null>(null);
+  const sectionKebabRef = useRef<HTMLDivElement>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -104,7 +125,17 @@ export default function ActivityForm({
     return () => {
       cancelled = true;
     };
-  }, [crewId]);
+  }, [crewId, sectionListVersion]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (sectionKebabRef.current && !sectionKebabRef.current.contains(e.target as Node)) {
+        setSectionKebabOpen(false);
+      }
+    }
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   const prevCrewRef = useRef<string | null>(null);
   useEffect(() => {
@@ -155,6 +186,46 @@ export default function ActivityForm({
       setSaveError(err instanceof Error ? err.message : "Delete failed");
     } finally {
       setDeleting(false);
+    }
+  };
+
+  const handleCreateSection = async () => {
+    const trimmed = newSectionName.trim();
+    if (!crewId || !trimmed) return;
+    setCreatingSection(true);
+    setCreateSectionError(null);
+    try {
+      const res = await fetch("/api/planner/sections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          crew_id: crewId,
+          name: trimmed,
+          start_ch: newSectionStartCh.trim() ? Number(newSectionStartCh) : null,
+          end_ch: newSectionEndCh.trim() ? Number(newSectionEndCh) : null,
+          direction: newSectionDirection || null,
+          project_id: newSectionProjectId.trim() || null,
+          itp_number: newSectionItpNumber.trim() || null,
+        }),
+      });
+      const body = (await res.json()) as { section?: DrainerSectionListItem; error?: string };
+      if (!res.ok) throw new Error(body.error || res.statusText);
+      const created = body.section;
+      if (!created?.id) throw new Error("Invalid response");
+      setDrainerSectionId(created.id);
+      setSectionListVersion((v) => v + 1);
+      setCreateSectionOpen(false);
+      setNewSectionName("");
+      setNewSectionStartCh("");
+      setNewSectionEndCh("");
+      setNewSectionDirection("onwards");
+      setNewSectionProjectId("");
+      setNewSectionItpNumber("");
+      setSectionKebabOpen(false);
+    } catch (e) {
+      setCreateSectionError(e instanceof Error ? e.message : "Could not create section");
+    } finally {
+      setCreatingSection(false);
     }
   };
 
@@ -221,7 +292,7 @@ export default function ActivityForm({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A1D2E]/40 backdrop-blur-[2px]">
-      <div className="mx-4 w-full max-w-lg rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface shadow-dashboard-hover">
+      <div className="mx-4 w-full max-w-xl rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface shadow-dashboard-hover">
         <div className="flex items-center justify-between border-b border-dashboard-border px-6 py-4">
           <h2 className="text-dashboard-lg font-semibold text-dashboard-text-primary">
             {isEditing ? "Edit Activity" : "New Activity"}
@@ -289,27 +360,190 @@ export default function ActivityForm({
               <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">
                 Section (optional)
               </label>
-              <select
-                value={drainerSectionId}
-                onChange={(e) => setDrainerSectionId(e.target.value)}
-                className={inputClass}
-                disabled={sectionsLoading || !!sectionsError}
-              >
-                <option value="">
-                  {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "No section"}
-                </option>
-                {sectionOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.name}
+              <div className="flex gap-2">
+                <select
+                  value={drainerSectionId}
+                  onChange={(e) => setDrainerSectionId(e.target.value)}
+                  className={`${inputClass} min-w-0 flex-1`}
+                  disabled={sectionsLoading || !!sectionsError}
+                >
+                  <option value="">
+                    {sectionsLoading ? "Loading sections…" : sectionsError ? "— Unavailable —" : "No section"}
                   </option>
-                ))}
-              </select>
+                  {sectionOptions.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative shrink-0 self-center" ref={sectionKebabRef}>
+                  <IconButton
+                    label="Section options"
+                    type="button"
+                    disabled={sectionsLoading || !!sectionsError}
+                    onClick={() => {
+                      setSectionKebabOpen((o) => !o);
+                      setCreateSectionOpen(false);
+                    }}
+                  >
+                    {kebabIcon}
+                  </IconButton>
+                  {sectionKebabOpen && (
+                    <div
+                      className="absolute right-0 top-full z-[60] mt-1 min-w-[200px] rounded-dashboard-md border border-dashboard-border bg-dashboard-surface py-1 shadow-dashboard-card"
+                      role="menu"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="w-full px-3 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
+                        onClick={() => {
+                          setSectionKebabOpen(false);
+                          setCreateSectionOpen(true);
+                          setCreateSectionError(null);
+                          setNewSectionName("");
+                          setNewSectionStartCh("");
+                          setNewSectionEndCh("");
+                          setNewSectionDirection("onwards");
+                          setNewSectionProjectId("");
+                          setNewSectionItpNumber("");
+                        }}
+                      >
+                        Create section
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {createSectionOpen && (
+                <div className="mt-3 space-y-3 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
+                  <p className="text-dashboard-sm font-semibold text-dashboard-text-primary">Create section</p>
+                  {createSectionError && (
+                    <p className="text-dashboard-xs text-dashboard-status-danger" role="alert">
+                      {createSectionError}
+                    </p>
+                  )}
+                  <div>
+                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                      Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={newSectionName}
+                      onChange={(e) => setNewSectionName(e.target.value)}
+                      placeholder="Section name"
+                      className={inputClass}
+                      disabled={creatingSection}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                        Start CH
+                      </label>
+                      <input
+                        type="number"
+                        value={newSectionStartCh}
+                        onChange={(e) => setNewSectionStartCh(e.target.value)}
+                        className={inputClass}
+                        disabled={creatingSection}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                        End CH
+                      </label>
+                      <input
+                        type="number"
+                        value={newSectionEndCh}
+                        onChange={(e) => setNewSectionEndCh(e.target.value)}
+                        className={inputClass}
+                        disabled={creatingSection}
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                      Direction
+                    </label>
+                    <select
+                      value={newSectionDirection}
+                      onChange={(e) =>
+                        setNewSectionDirection(e.target.value as "onwards" | "backwards")
+                      }
+                      className={inputClass}
+                      disabled={creatingSection}
+                    >
+                      <option value="onwards">Onwards</option>
+                      <option value="backwards">Backwards</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                      Project ID (UUID)
+                    </label>
+                    <input
+                      type="text"
+                      value={newSectionProjectId}
+                      onChange={(e) => setNewSectionProjectId(e.target.value)}
+                      placeholder="Optional — link to row in projects table"
+                      className={inputClass}
+                      disabled={creatingSection}
+                      autoComplete="off"
+                    />
+                    <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">
+                      Name and number come from the linked project after save.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                      ITP number
+                    </label>
+                    <input
+                      type="text"
+                      value={newSectionItpNumber}
+                      onChange={(e) => setNewSectionItpNumber(e.target.value)}
+                      className={inputClass}
+                      disabled={creatingSection}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={creatingSection || !newSectionName.trim()}
+                      onClick={() => void handleCreateSection()}
+                      className="rounded-dashboard-sm bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] px-3 py-1.5 text-dashboard-sm font-medium text-white shadow-dashboard-card disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {creatingSection ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={creatingSection}
+                      onClick={() => {
+                        setCreateSectionOpen(false);
+                        setNewSectionName("");
+                        setNewSectionStartCh("");
+                        setNewSectionEndCh("");
+                        setNewSectionDirection("onwards");
+                        setNewSectionProjectId("");
+                        setNewSectionItpNumber("");
+                        setCreateSectionError(null);
+                      }}
+                      className="rounded-dashboard-sm bg-dashboard-surface px-3 py-1.5 text-dashboard-sm font-medium text-dashboard-text-secondary hover:bg-dashboard-border/30"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
               {sectionsError && (
                 <p className="mt-1 text-dashboard-xs text-dashboard-status-danger">{sectionsError}</p>
               )}
-              {!sectionsLoading && !sectionsError && sectionOptions.length === 0 && (
+              {!sectionsLoading && !sectionsError && sectionOptions.length === 0 && !createSectionOpen && (
                 <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">
-                  No sections for this crew. Add a section in the main app before creating activities.
+                  No sections for this crew. Use the menu to create one, or add a section in the main app.
                 </p>
               )}
             </div>

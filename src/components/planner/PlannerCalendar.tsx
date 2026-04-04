@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import FullCalendar from "@fullcalendar/react";
 import dayGridPlugin from "@fullcalendar/daygrid";
 import interactionPlugin from "@fullcalendar/interaction";
@@ -17,7 +17,22 @@ import {
   PEOPLE_LEAVE_BORDER_COLOR,
 } from "@/lib/planner-constants";
 import { getCrewColor } from "@/lib/planner-constants";
-import { addDays, eachDayOfInterval, format, startOfDay, startOfWeek } from "date-fns";
+import {
+  addDays,
+  addMonths,
+  eachDayOfInterval,
+  endOfMonth,
+  endOfWeek,
+  format,
+  isAfter,
+  isBefore,
+  isSameMonth,
+  parseISO,
+  startOfDay,
+  startOfMonth,
+  startOfWeek,
+  subMonths,
+} from "date-fns";
 import { addDaysDateOnly, subDaysDateOnly } from "@/lib/planner-date";
 import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import { getWaPublicHolidayName } from "@/lib/wa-public-holidays";
@@ -54,6 +69,22 @@ function activityBaseId(eventId: string): string {
   return idx >= 0 ? eventId.slice(0, idx) : eventId;
 }
 
+/** Monday-first weeks covering `displayMonth` (padding days outside the month included). */
+function monthCalendarGrid(displayMonth: Date): Date[][] {
+  const monthStart = startOfMonth(displayMonth);
+  const monthEnd = endOfMonth(displayMonth);
+  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const gridEnd = endOfWeek(monthEnd, { weekStartsOn: 1 });
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  const weeks: Date[][] = [];
+  for (let i = 0; i < days.length; i += 7) {
+    weeks.push(days.slice(i, i + 7));
+  }
+  return weeks;
+}
+
+const WEEKDAY_LABELS = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"] as const;
+
 export default function PlannerCalendar({
   activities,
   crewMap,
@@ -66,6 +97,10 @@ export default function PlannerCalendar({
 }: PlannerCalendarProps) {
   /** When true, Sat/Sun columns are hidden (FullCalendar `weekends={false}`). */
   const [hideWeekends, setHideWeekends] = useState(false);
+  const [datePickerOpen, setDatePickerOpen] = useState(false);
+  /** Month shown in the popup grid (1st of month). */
+  const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
+  const calendarRef = useRef<FullCalendar>(null);
 
   const visibleRange = useMemo(
     () => getPlannerHorizonVisibleRange(horizon, activities),
@@ -77,19 +112,42 @@ export default function PlannerCalendar({
     [visibleRange]
   );
 
+  const dateInputMax = useMemo(
+    () => subDaysDateOnly(visibleRange.endExclusive, 1),
+    [visibleRange.endExclusive]
+  );
+
+  const rangeStartDate = useMemo(() => parseISO(visibleRange.start), [visibleRange.start]);
+  const rangeEndDate = useMemo(() => parseISO(dateInputMax), [dateInputMax]);
+
+  const monthWeeks = useMemo(() => monthCalendarGrid(viewMonth), [viewMonth]);
+
+  const canPrevMonth = useMemo(
+    () => isAfter(startOfMonth(viewMonth), startOfMonth(rangeStartDate)),
+    [viewMonth, rangeStartDate]
+  );
+
+  const canNextMonth = useMemo(
+    () => isBefore(startOfMonth(viewMonth), startOfMonth(rangeEndDate)),
+    [viewMonth, rangeEndDate]
+  );
+
+  const isDayOutOfPlannerRange = useCallback(
+    (d: Date) => {
+      const s = format(d, "yyyy-MM-dd");
+      return s < visibleRange.start || s > dateInputMax;
+    },
+    [visibleRange.start, dateInputMax]
+  );
+
   /** N consecutive calendar weeks from Monday of this week — matches HorizonSelector (2W / 4W / …). */
   const calendarViews = useMemo(
     () => ({
       plannerHorizon: {
         type: "dayGrid" as const,
         duration: { weeks: horizon },
-        buttonText: `${horizon}W`,
         dayMaxEvents: true,
         aspectRatio: Math.max(0.55, 2.4 / horizon),
-      },
-      dayGridWeek: {
-        dayMaxEvents: true,
-        aspectRatio: 0.42,
       },
     }),
     [horizon]
@@ -181,6 +239,53 @@ export default function PlannerCalendar({
     []
   );
 
+  const gotoWeekContaining = useCallback((ymd: string) => {
+    const api = calendarRef.current?.getApi();
+    if (!api) return;
+    const d = parseISO(ymd);
+    api.gotoDate(startOfWeek(startOfDay(d), { weekStartsOn: 1 }));
+  }, []);
+
+  const openTodayDatePicker = useCallback(() => {
+    const api = calendarRef.current?.getApi();
+    const anchor = api?.getDate() ?? new Date();
+    setViewMonth(startOfMonth(anchor));
+    setDatePickerOpen(true);
+  }, []);
+
+  const goToThisWeekToday = useCallback(() => {
+    gotoWeekContaining(format(startOfDay(new Date()), "yyyy-MM-dd"));
+    setDatePickerOpen(false);
+  }, [gotoWeekContaining]);
+
+  const handlePickDayInMonth = useCallback(
+    (d: Date) => {
+      if (isDayOutOfPlannerRange(d)) return;
+      gotoWeekContaining(format(d, "yyyy-MM-dd"));
+      setDatePickerOpen(false);
+    },
+    [gotoWeekContaining, isDayOutOfPlannerRange]
+  );
+
+  const customButtons = useMemo(
+    () => ({
+      pickDate: {
+        text: "Today",
+        click: () => openTodayDatePicker(),
+      },
+    }),
+    [openTodayDatePicker]
+  );
+
+  useEffect(() => {
+    if (!datePickerOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setDatePickerOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [datePickerOpen]);
+
   const handleEventClick = (info: EventClickArg) => {
     if (info.event.extendedProps.leave) return;
     const activity = info.event.extendedProps.activity as PlannerActivity;
@@ -267,7 +372,119 @@ export default function PlannerCalendar({
           </label>
         </div>
       </div>
+      {datePickerOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1D2E]/40 p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="planner-date-picker-title"
+          onClick={() => setDatePickerOpen(false)}
+        >
+          <div
+            className="w-full max-w-[min(100%,320px)] rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2 id="planner-date-picker-title" className="text-dashboard-md font-semibold text-dashboard-text-primary">
+              Select month
+            </h2>
+            <p className="mt-1 text-dashboard-xs text-dashboard-text-secondary">
+              Pick a day in the grid; the planner jumps to the week that contains it. Use arrows to change month.
+            </p>
+
+            <div className="mt-3 flex items-center justify-between gap-2">
+              <button
+                type="button"
+                disabled={!canPrevMonth}
+                onClick={() => setViewMonth((m) => subMonths(m, 1))}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-dashboard-md border border-dashboard-border bg-dashboard-bg text-dashboard-text-primary transition-colors hover:bg-dashboard-border/50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Previous month"
+              >
+                <span aria-hidden className="text-lg leading-none">
+                  ‹
+                </span>
+              </button>
+              <span className="min-w-0 flex-1 text-center text-dashboard-sm font-semibold text-dashboard-text-primary">
+                {format(viewMonth, "MMMM yyyy")}
+              </span>
+              <button
+                type="button"
+                disabled={!canNextMonth}
+                onClick={() => setViewMonth((m) => addMonths(m, 1))}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-dashboard-md border border-dashboard-border bg-dashboard-bg text-dashboard-text-primary transition-colors hover:bg-dashboard-border/50 disabled:cursor-not-allowed disabled:opacity-40"
+                aria-label="Next month"
+              >
+                <span aria-hidden className="text-lg leading-none">
+                  ›
+                </span>
+              </button>
+            </div>
+
+            <div className="mt-3 grid grid-cols-7 gap-y-1 text-center text-dashboard-xs font-medium text-dashboard-text-muted">
+              {WEEKDAY_LABELS.map((d) => (
+                <div key={d} className="py-1">
+                  {d}
+                </div>
+              ))}
+            </div>
+            <div className="mt-1 space-y-1">
+              {monthWeeks.map((week, wi) => (
+                <div key={wi} className="grid grid-cols-7 gap-1">
+                  {week.map((day) => {
+                    const inMonth = isSameMonth(day, viewMonth);
+                    const disabled = isDayOutOfPlannerRange(day);
+                    const ds = format(day, "yyyy-MM-dd");
+                    return (
+                      <button
+                        key={ds}
+                        type="button"
+                        disabled={disabled}
+                        onClick={() => handlePickDayInMonth(day)}
+                        className={`h-8 rounded-dashboard-sm text-dashboard-xs font-medium transition-colors ${
+                          disabled
+                            ? "cursor-not-allowed text-dashboard-text-muted/40"
+                            : inMonth
+                              ? "text-dashboard-text-primary hover:bg-dashboard-primary/15 focus-visible:outline focus-visible:outline-2 focus-visible:outline-dashboard-primary/40"
+                              : "text-dashboard-text-muted/50 hover:bg-dashboard-bg"
+                        }`}
+                      >
+                        {format(day, "d")}
+                      </button>
+                    );
+                  })}
+                </div>
+              ))}
+            </div>
+
+            <div className="mt-4 flex flex-wrap items-center justify-end gap-2 border-t border-dashboard-border pt-3">
+              <button
+                type="button"
+                onClick={() => {
+                  setViewMonth(startOfMonth(new Date()));
+                }}
+                className="mr-auto rounded-dashboard-md px-3 py-1.5 text-dashboard-xs font-medium text-dashboard-text-secondary hover:text-dashboard-text-primary"
+              >
+                This month
+              </button>
+              <button
+                type="button"
+                onClick={goToThisWeekToday}
+                className="rounded-dashboard-md border border-dashboard-border bg-dashboard-bg px-3 py-1.5 text-dashboard-xs font-medium text-dashboard-text-primary hover:bg-dashboard-border/40"
+              >
+                Go to today
+              </button>
+              <button
+                type="button"
+                onClick={() => setDatePickerOpen(false)}
+                className="rounded-dashboard-md px-3 py-1.5 text-dashboard-xs font-medium text-dashboard-text-secondary hover:text-dashboard-text-primary"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       <FullCalendar
+        ref={calendarRef}
         key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}-w${hideWeekends ? 0 : 1}`}
         plugins={[dayGridPlugin, interactionPlugin]}
         initialView="plannerHorizon"
@@ -283,10 +500,11 @@ export default function PlannerCalendar({
         validRange={validRange}
         dayCellClassNames={dayCellClassNames}
         dayCellDidMount={dayCellDidMount}
+        customButtons={customButtons}
         headerToolbar={{
-          left: "prev,next today",
+          left: "prev,next pickDate",
           center: "title",
-          right: "plannerHorizon,dayGridWeek,dayGridMonth",
+          right: "",
         }}
         eventClick={handleEventClick}
         eventDrop={handleEventDrop}

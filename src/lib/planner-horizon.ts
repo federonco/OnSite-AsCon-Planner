@@ -1,9 +1,13 @@
-import { addWeeks, endOfWeek, format, startOfDay, startOfWeek } from "date-fns";
+import { addWeeks, addYears, endOfWeek, format, max, parseISO, startOfDay, startOfWeek } from "date-fns";
 import { addDaysDateOnly } from "./planner-date";
 import type { PlannerActivity } from "./planner-types";
 
+/** Years ahead of today for FullCalendar `validRange` / month popup (horizon only controls grid width, not this cap). */
+const PLANNER_RANGE_MAX_YEARS = 25;
+
 /**
- * FullCalendar `validRange` and planner UX: navigable window from (min week start, activities) through horizon end (week containing today + N weeks).
+ * FullCalendar `validRange`: start = earliest (this Monday or min activity start); end = far future and/or data, not “today + horizon weeks” alone.
+ * Horizon weeks only define how many columns the day grid shows at once; navigation can move much further.
  * `end` is exclusive (FullCalendar convention).
  */
 export function getPlannerHorizonVisibleRange(
@@ -18,12 +22,20 @@ export function getPlannerHorizonVisibleRange(
     const s = act.start_date;
     if (s < rangeStart) rangeStart = s;
   }
-  const horizonEndInclusive = format(
-    endOfWeek(addWeeks(startOfDay(now), horizonWeeks), { weekStartsOn }),
-    "yyyy-MM-dd"
-  );
+
+  const day = startOfDay(now);
+  const endCandidates: Date[] = [
+    endOfWeek(addWeeks(day, horizonWeeks), { weekStartsOn }),
+    endOfWeek(addYears(day, PLANNER_RANGE_MAX_YEARS), { weekStartsOn }),
+  ];
+  for (const act of activities) {
+    endCandidates.push(parseISO(act.end_date));
+  }
+
+  const rangeEndInclusive = format(max(endCandidates), "yyyy-MM-dd");
+
   return {
     start: rangeStart,
-    endExclusive: addDaysDateOnly(horizonEndInclusive, 1),
+    endExclusive: addDaysDateOnly(rangeEndInclusive, 1),
   };
 }

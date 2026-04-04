@@ -34,10 +34,10 @@ const PlannerCalendar = dynamic(
   { ssr: false, loading: () => <LoadingPlaceholder /> }
 );
 
-const PlannerGantt = dynamic(() => import("@/components/planner/PlannerGantt"), {
-  ssr: false,
-  loading: () => <LoadingPlaceholder />,
-});
+const LinearLookAhead = dynamic(
+  () => import("@/components/planner/LinearLookAhead"),
+  { ssr: false, loading: () => <LoadingPlaceholder /> }
+);
 
 function LoadingPlaceholder() {
   return (
@@ -71,7 +71,7 @@ export default function PlannerPage() {
   const [selectedActivity, setSelectedActivity] = useState<PlannerActivity | null>(null);
   const [defaultDate, setDefaultDate] = useState<string | null>(null);
   const [showImporter, setShowImporter] = useState(false);
-  const [viewMode, setViewMode] = useState<"calendar" | "gantt">("calendar");
+  const [viewMode, setViewMode] = useState<"calendar" | "linear">("calendar");
   const [ganttSelected, setGanttSelected] = useState<PlannerActivity | null>(null);
   const [crewsFetchError, setCrewsFetchError] = useState<string | null>(null);
   const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
@@ -232,7 +232,7 @@ export default function PlannerPage() {
   }, [onlyEnabledCrewId]);
 
   useEffect(() => {
-    if (viewMode !== "gantt") setGanttSelected(null);
+    if (viewMode !== "linear") setGanttSelected(null);
   }, [viewMode]);
 
   const handleSave = async (payload: CreateActivityPayload | UpdateActivityPayload) => {
@@ -363,17 +363,17 @@ export default function PlannerPage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => setViewMode("gantt")}
+                      onClick={() => setViewMode("linear")}
                       className={`rounded-dashboard-sm px-3 py-1.5 text-dashboard-sm font-medium transition-colors ${
-                        viewMode === "gantt"
+                        viewMode === "linear"
                           ? "bg-dashboard-surface text-dashboard-text-primary shadow-sm"
                           : "text-dashboard-text-secondary hover:text-dashboard-text-primary"
                       }`}
                     >
-                      Gantt
+                      Linear
                     </button>
                   </div>
-                  {viewMode === "gantt" && (
+                  {viewMode === "linear" && (
                     <div className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
                       <HorizonSelector value={horizon} onChange={setHorizon} />
                     </div>
@@ -444,7 +444,7 @@ export default function PlannerPage() {
               peopleLeaves={visibleLeaves}
             />
           ) : (
-            <PlannerGantt
+            <LinearLookAhead
               activities={visibleActivities}
               crewMap={crewMap}
               horizon={horizon}
@@ -456,7 +456,7 @@ export default function PlannerPage() {
           )}
 
           <div className="flex flex-wrap items-center gap-6 text-dashboard-sm text-dashboard-text-secondary">
-            {viewMode === "gantt" && ganttSelected && (
+            {viewMode === "linear" && ganttSelected && (
               <span className="font-medium text-dashboard-text-primary">
                 Selected: {ganttSelected.name}
               </span>

@@ -94,7 +94,7 @@ export function Sidebar({ activeId = "schedule", collapsed: collapsedProp, onCol
   return (
     <aside
       className={cn(
-        "flex h-full shrink-0 flex-col bg-dashboard-sidebar py-6 text-dashboard-sidebar-text transition-[width] duration-200 ease-dashboard",
+        "flex min-h-0 shrink-0 flex-col overflow-hidden bg-dashboard-sidebar py-6 text-dashboard-sidebar-text transition-[width] duration-200 ease-dashboard",
         collapsed ? "w-sidebar-collapsed px-2" : "w-sidebar px-3"
       )}
       aria-label="Main navigation"
@@ -136,7 +136,7 @@ export function Sidebar({ activeId = "schedule", collapsed: collapsedProp, onCol
           )}
         </Link>
       </div>
-      <nav id="sidebar-main-nav" className="flex flex-1 flex-col gap-1">
+      <nav id="sidebar-main-nav" className="flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto overflow-x-hidden">
         <SidebarItem
           href="/"
           icon={iconHome}

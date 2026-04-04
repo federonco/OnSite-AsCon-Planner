@@ -13,7 +13,7 @@ export function AppShell({ sidebar, header, children, className }: AppShellProps
   return (
     <div
       className={cn(
-        "dashboard-theme flex h-[100dvh] max-h-[100dvh] min-h-0 w-full bg-dashboard-bg font-sans text-dashboard-text-primary antialiased",
+        "dashboard-theme flex h-[100dvh] max-h-[100dvh] min-h-0 w-full flex-row items-stretch overflow-hidden bg-dashboard-bg font-sans text-dashboard-text-primary antialiased",
         className
       )}
     >
