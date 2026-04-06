@@ -30,8 +30,6 @@ export async function POST(req: NextRequest) {
     start_ch?: unknown;
     end_ch?: unknown;
     direction?: unknown;
-    project_id?: unknown;
-    itp_number?: unknown;
   };
   const crewId = String(b.crew_id ?? "").trim();
   const name = String(b.name ?? "").trim();
@@ -46,10 +44,6 @@ export async function POST(req: NextRequest) {
   const end_ch = numOrNull(b.end_ch);
   const direction =
     b.direction != null && String(b.direction).trim() !== "" ? String(b.direction).trim() : null;
-  const project_id =
-    b.project_id != null && String(b.project_id).trim() !== "" ? String(b.project_id).trim() : null;
-  const itp_number =
-    b.itp_number != null && String(b.itp_number).trim() !== "" ? String(b.itp_number).trim() : null;
 
   const supabase = getSupabaseAdmin();
   const { data, error } = await supabase
@@ -60,8 +54,6 @@ export async function POST(req: NextRequest) {
       start_ch,
       end_ch,
       direction,
-      project_id,
-      itp_number,
     })
     .select("id, name")
     .single();

@@ -86,8 +86,6 @@ export default function ActivityForm({
   const [newSectionStartCh, setNewSectionStartCh] = useState("");
   const [newSectionEndCh, setNewSectionEndCh] = useState("");
   const [newSectionDirection, setNewSectionDirection] = useState<"onwards" | "backwards">("onwards");
-  const [newSectionProjectId, setNewSectionProjectId] = useState("");
-  const [newSectionItpNumber, setNewSectionItpNumber] = useState("");
   const [creatingSection, setCreatingSection] = useState(false);
   const [createSectionError, setCreateSectionError] = useState<string | null>(null);
   const sectionKebabRef = useRef<HTMLDivElement>(null);
@@ -204,8 +202,6 @@ export default function ActivityForm({
           start_ch: newSectionStartCh.trim() ? Number(newSectionStartCh) : null,
           end_ch: newSectionEndCh.trim() ? Number(newSectionEndCh) : null,
           direction: newSectionDirection || null,
-          project_id: newSectionProjectId.trim() || null,
-          itp_number: newSectionItpNumber.trim() || null,
         }),
       });
       const body = (await res.json()) as { section?: DrainerSectionListItem; error?: string };
@@ -219,8 +215,6 @@ export default function ActivityForm({
       setNewSectionStartCh("");
       setNewSectionEndCh("");
       setNewSectionDirection("onwards");
-      setNewSectionProjectId("");
-      setNewSectionItpNumber("");
       setSectionKebabOpen(false);
     } catch (e) {
       setCreateSectionError(e instanceof Error ? e.message : "Could not create section");
@@ -291,10 +285,18 @@ export default function ActivityForm({
     "w-full rounded-dashboard-md border border-dashboard-border bg-dashboard-surface px-3 py-2 text-dashboard-sm text-dashboard-text-primary placeholder:text-dashboard-text-muted focus:outline-none focus:ring-2 focus:ring-[#5B5FEF]/25 focus:border-dashboard-primary";
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A1D2E]/40 backdrop-blur-[2px]">
-      <div className="mx-4 w-full max-w-xl rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface shadow-dashboard-hover">
-        <div className="flex items-center justify-between border-b border-dashboard-border px-6 py-4">
-          <h2 className="text-dashboard-lg font-semibold text-dashboard-text-primary">
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-[#1A1D2E]/40 p-3 backdrop-blur-[2px] sm:p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="activity-form-title"
+    >
+      <div className="flex max-h-[min(100dvh-1.5rem,calc(100svh-1.5rem))] min-h-0 w-full max-w-xl flex-col overflow-hidden rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface shadow-dashboard-hover">
+        <div className="flex shrink-0 items-center justify-between border-b border-dashboard-border px-4 py-3 sm:px-6 sm:py-4">
+          <h2
+            id="activity-form-title"
+            className="text-dashboard-lg font-semibold text-dashboard-text-primary"
+          >
             {isEditing ? "Edit Activity" : "New Activity"}
           </h2>
           <button
@@ -306,7 +308,9 @@ export default function ActivityForm({
           </button>
         </div>
 
-        <form onSubmit={handleSubmit} className="space-y-4 p-6">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain px-4 py-4 sm:px-6">
+            <div className="space-y-4">
           {saveError && (
             <div
               className="rounded-dashboard-md border border-dashboard-status-danger/40 bg-dashboard-status-danger/10 px-3 py-2 text-dashboard-sm text-dashboard-status-danger"
@@ -405,8 +409,6 @@ export default function ActivityForm({
                           setNewSectionStartCh("");
                           setNewSectionEndCh("");
                           setNewSectionDirection("onwards");
-                          setNewSectionProjectId("");
-                          setNewSectionItpNumber("");
                         }}
                       >
                         Create section
@@ -479,36 +481,6 @@ export default function ActivityForm({
                       <option value="backwards">Backwards</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
-                      Project ID (UUID)
-                    </label>
-                    <input
-                      type="text"
-                      value={newSectionProjectId}
-                      onChange={(e) => setNewSectionProjectId(e.target.value)}
-                      placeholder="Optional — link to row in projects table"
-                      className={inputClass}
-                      disabled={creatingSection}
-                      autoComplete="off"
-                    />
-                    <p className="mt-1 text-dashboard-xs text-dashboard-text-muted">
-                      Name and number come from the linked project after save.
-                    </p>
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
-                      ITP number
-                    </label>
-                    <input
-                      type="text"
-                      value={newSectionItpNumber}
-                      onChange={(e) => setNewSectionItpNumber(e.target.value)}
-                      className={inputClass}
-                      disabled={creatingSection}
-                      autoComplete="off"
-                    />
-                  </div>
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       type="button"
@@ -527,8 +499,6 @@ export default function ActivityForm({
                         setNewSectionStartCh("");
                         setNewSectionEndCh("");
                         setNewSectionDirection("onwards");
-                        setNewSectionProjectId("");
-                        setNewSectionItpNumber("");
                         setCreateSectionError(null);
                       }}
                       className="rounded-dashboard-sm bg-dashboard-surface px-3 py-1.5 text-dashboard-sm font-medium text-dashboard-text-secondary hover:bg-dashboard-border/30"
@@ -686,8 +656,11 @@ export default function ActivityForm({
               </div>
             )}
           </div>
+            </div>
+          </div>
 
-          <div className="flex gap-3 pt-2">
+          <div className="shrink-0 border-t border-dashboard-border bg-dashboard-surface px-4 py-3 sm:px-6">
+            <div className="flex flex-wrap gap-3">
             <button
               type="submit"
               disabled={
@@ -698,7 +671,7 @@ export default function ActivityForm({
                 !endDate ||
                 !drainerSectionId.trim()
               }
-              className="flex-1 rounded-dashboard-md bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] py-2.5 text-dashboard-sm font-medium text-white shadow-dashboard-card transition-[filter,opacity] hover:brightness-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
+              className="min-w-[120px] flex-1 rounded-dashboard-md bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] py-2.5 text-dashboard-sm font-medium text-white shadow-dashboard-card transition-[filter,opacity] hover:brightness-[1.02] disabled:cursor-not-allowed disabled:opacity-50"
             >
               {saving ? "Saving..." : isEditing ? "Update" : "Create"}
             </button>
@@ -719,6 +692,7 @@ export default function ActivityForm({
             >
               Cancel
             </button>
+            </div>
           </div>
         </form>
       </div>

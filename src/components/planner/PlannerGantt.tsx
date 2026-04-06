@@ -52,6 +52,45 @@ function baseActivityId(taskId: string): string {
   return idx >= 0 ? taskId.slice(0, idx) : taskId;
 }
 
+/**
+ * gantt-task-react only draws finish→start arrows (predecessor bar right edge → successor left edge).
+ * We attach `dependencies` on the successor’s first segment row; FS/FF use the predecessor’s last
+ * segment, SS uses the first segment (best-effort for “parallel” / start-to-start).
+ */
+function applyDependencyArrows(tasks: Task[], activities: PlannerActivity[]): Task[] {
+  const segmentIdsByActivity = new Map<string, string[]>();
+  for (const t of tasks) {
+    if (t.type !== "task" || isLeaveTaskId(String(t.id))) continue;
+    const aid = baseActivityId(String(t.id));
+    const list = segmentIdsByActivity.get(aid) ?? [];
+    list.push(String(t.id));
+    segmentIdsByActivity.set(aid, list);
+  }
+
+  const byId = new Map(activities.map((a) => [a.id, a]));
+
+  return tasks.map((task) => {
+    if (task.type !== "task" || isLeaveTaskId(String(task.id))) return task;
+    const tid = String(task.id);
+    const actId = baseActivityId(tid);
+    const act = byId.get(actId);
+    const predId = act?.predecessor_id;
+    if (!predId || predId === actId) return task;
+
+    const succSegs = segmentIdsByActivity.get(actId);
+    const predSegs = segmentIdsByActivity.get(predId);
+    if (!succSegs?.length || !predSegs?.length) return task;
+    if (tid !== succSegs[0]) return task;
+
+    const depType = act.dependency_type;
+    const predTaskId =
+      depType === "SS" ? predSegs[0] : predSegs[predSegs.length - 1];
+    if (predTaskId === tid) return task;
+
+    return { ...task, dependencies: [predTaskId] };
+  });
+}
+
 /** Matches gantt-task-react@0.3.9 dist/index.css (global). */
 const GTL = {
   wrap: "_3ZbQT",
@@ -392,7 +431,7 @@ export default function PlannerGantt({
       }
     }
 
-    return result;
+    return applyDependencyArrows(result, activities);
   }, [activities, crewCollapsed, crewMap, peopleLeaves]);
 
   const tasks = useMemo(() => filterTasksForGantt(tasksBuilt), [tasksBuilt]);
@@ -700,6 +739,8 @@ export default function PlannerGantt({
           listCellWidth={`${ganttLayout.listTotalWidthPx}px`}
           barCornerRadius={4}
           todayColor="rgba(59, 139, 212, 0.15)"
+          arrowColor="rgba(100, 116, 139, 0.85)"
+          arrowIndent={16}
           projectBackgroundColor="#374151"
           projectProgressColor="#6B7280"
           projectProgressSelectedColor="#9CA3AF"
