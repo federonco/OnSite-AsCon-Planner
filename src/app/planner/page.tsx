@@ -14,6 +14,7 @@ import {
   mapRowToPlannerActivity,
 } from "@/lib/planner-activity-mapper";
 import { mapRowToPlannerPeopleLeave } from "@/lib/planner-leave-mapper";
+import { sanitizeApiErrorMessage } from "@/lib/api-error-message";
 import { getPlannerHorizonVisibleRange } from "@/lib/planner-horizon";
 import HorizonSelector from "@/components/planner/HorizonSelector";
 import CrewFilter from "@/components/planner/CrewFilter";
@@ -127,13 +128,26 @@ export default function PlannerPage() {
       setCrewsFetchError(null);
       try {
         const res = await fetch("/api/planner/crews");
-        const body = (await res.json()) as { crews?: Crew[]; error?: string };
-        if (!res.ok) throw new Error(body.error || res.statusText);
+        const body = (await res.json().catch(() => null)) as {
+          crews?: Crew[];
+          error?: string;
+        } | null;
+        if (!res.ok) {
+          const msg = body?.error || res.statusText || "Request failed";
+          throw new Error(sanitizeApiErrorMessage(msg));
+        }
+        if (!body) {
+          throw new Error(
+            "Empty response from server (check API env: SUPABASE_SERVICE_ROLE_KEY, NEXT_PUBLIC_SUPABASE_URL)"
+          );
+        }
         setCrews(body.crews ?? []);
       } catch (err) {
         console.error("Failed to fetch crews:", err);
         setCrews([]);
-        setCrewsFetchError(err instanceof Error ? err.message : "Failed to load crews");
+        setCrewsFetchError(
+          sanitizeApiErrorMessage(err instanceof Error ? err.message : "Failed to load crews")
+        );
       }
     };
     void fetchCrews();
@@ -156,7 +170,7 @@ export default function PlannerPage() {
           typeof (body as { error: unknown }).error === "string"
             ? (body as { error: string }).error
             : res.statusText;
-        setActivitiesFetchError(msg);
+        setActivitiesFetchError(sanitizeApiErrorMessage(msg));
         return;
       }
       if (Array.isArray(body)) {
@@ -173,7 +187,9 @@ export default function PlannerPage() {
       }
     } catch (err) {
       console.error("Failed to fetch activities:", err);
-      setActivitiesFetchError(err instanceof Error ? err.message : "Network error");
+      setActivitiesFetchError(
+        sanitizeApiErrorMessage(err instanceof Error ? err.message : "Network error")
+      );
     } finally {
       if (!opts?.silent) setLoading(false);
     }
@@ -248,7 +264,7 @@ export default function PlannerPage() {
       console.error("Save activity failed:", msg);
       throw new Error(msg);
     }
-    const raw = (await res.json()) as unknown;
+    const raw = (await res.json().catch(() => null)) as unknown;
     const saved =
       raw && typeof raw === "object"
         ? mapRowToPlannerActivity(raw as Record<string, unknown>)
@@ -288,7 +304,7 @@ export default function PlannerPage() {
       body: JSON.stringify(payload),
     });
     if (!res.ok) return false;
-    const raw = (await res.json()) as unknown;
+    const raw = (await res.json().catch(() => null)) as unknown;
     const saved =
       raw && typeof raw === "object"
         ? mapRowToPlannerActivity(raw as Record<string, unknown>)
@@ -387,7 +403,10 @@ export default function PlannerPage() {
                       onlyEnabledCrewId={onlyEnabledCrewId}
                     />
                     {crewsFetchError && (
-                      <p className="max-w-[20rem] text-dashboard-xs text-dashboard-status-danger" role="alert">
+                      <p
+                        className="max-w-[20rem] break-words text-dashboard-xs text-dashboard-status-danger line-clamp-6"
+                        role="alert"
+                      >
                         {crewsFetchError}
                       </p>
                     )}
@@ -422,7 +441,7 @@ export default function PlannerPage() {
         <div className="mx-auto max-w-[1600px] space-y-6">
           {activitiesFetchError && (
             <div
-              className="rounded-dashboard-lg border border-dashboard-status-danger/40 bg-dashboard-status-danger/10 px-4 py-3 text-dashboard-sm text-dashboard-status-danger"
+              className="max-h-40 overflow-y-auto break-words rounded-dashboard-lg border border-dashboard-status-danger/40 bg-dashboard-status-danger/10 px-4 py-3 text-dashboard-sm text-dashboard-status-danger"
               role="alert"
             >
               Could not load activities: {activitiesFetchError}

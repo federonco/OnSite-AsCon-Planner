@@ -101,6 +101,12 @@ export default function PlannerCalendar({
   /** Month shown in the popup grid (1st of month). */
   const [viewMonth, setViewMonth] = useState(() => startOfMonth(new Date()));
   const calendarRef = useRef<FullCalendar>(null);
+  const [sendEmailOpen, setSendEmailOpen] = useState(false);
+  const [recipientEmail, setRecipientEmail] = useState("");
+  const [emailSending, setEmailSending] = useState(false);
+  const [emailError, setEmailError] = useState<string | null>(null);
+
+  const crewNamesRecord = useMemo(() => Object.fromEntries(crewMap), [crewMap]);
 
   const visibleRange = useMemo(
     () => getPlannerHorizonVisibleRange(horizon, activities),
@@ -277,6 +283,60 @@ export default function PlannerCalendar({
     [openTodayDatePicker]
   );
 
+  const handleOpenSendEmail = useCallback(() => {
+    setEmailError(null);
+    setSendEmailOpen(true);
+  }, []);
+
+  const handleConfirmSendEmail = useCallback(async () => {
+    setEmailSending(true);
+    setEmailError(null);
+    try {
+      const api = calendarRef.current?.getApi();
+      const viewAnchorDate = api
+        ? format(api.getDate(), "yyyy-MM-dd")
+        : format(new Date(), "yyyy-MM-dd");
+      const res = await fetch("/api/planner/calendar/email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          recipientEmail: recipientEmail.trim() || undefined,
+          horizonWeeks: horizon,
+          hideWeekends,
+          viewAnchorDate,
+          activities,
+          peopleLeaves,
+          crewMap: crewNamesRecord,
+        }),
+      });
+      const data = (await res.json()) as { ok?: boolean; error?: string };
+      if (!res.ok) throw new Error(data.error || res.statusText);
+      setSendEmailOpen(false);
+      setRecipientEmail("");
+      window.alert("Planning PDF sent by email.");
+    } catch (e) {
+      setEmailError(e instanceof Error ? e.message : "Send failed");
+    } finally {
+      setEmailSending(false);
+    }
+  }, [
+    activities,
+    crewNamesRecord,
+    hideWeekends,
+    horizon,
+    peopleLeaves,
+    recipientEmail,
+  ]);
+
+  useEffect(() => {
+    if (!sendEmailOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setSendEmailOpen(false);
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sendEmailOpen]);
+
   useEffect(() => {
     if (!datePickerOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -358,8 +418,18 @@ export default function PlannerCalendar({
       <div className="relative z-[1] mb-4 flex flex-col gap-3 border-b border-dashboard-border pb-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <span className="text-dashboard-sm font-medium text-dashboard-text-secondary">Planning horizon</span>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-4">
-          <div className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
-            <HorizonSelector value={horizon} onChange={onHorizonChange} />
+          <div className="flex shrink-0 flex-wrap items-center gap-2">
+            <div className="w-[220px] max-w-full rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-0.5">
+              <HorizonSelector value={horizon} onChange={onHorizonChange} equalWidth />
+            </div>
+            <button
+              type="button"
+              onClick={() => handleOpenSendEmail()}
+              disabled={emailSending}
+              className="shrink-0 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg px-3 py-1.5 text-dashboard-sm font-medium text-dashboard-text-primary transition-colors hover:bg-dashboard-border/40 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              Send PDF
+            </button>
           </div>
           <label className="flex cursor-pointer select-none items-center gap-2 text-dashboard-sm text-dashboard-text-secondary">
             <input
@@ -372,6 +442,60 @@ export default function PlannerCalendar({
           </label>
         </div>
       </div>
+      {sendEmailOpen && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1D2E]/40 p-4 backdrop-blur-[2px]"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="planner-send-pdf-title"
+          onClick={() => setSendEmailOpen(false)}
+        >
+          <div
+            className="w-full max-w-md rounded-dashboard-lg border border-dashboard-border bg-dashboard-surface p-4 shadow-dashboard-card"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h2
+              id="planner-send-pdf-title"
+              className="text-dashboard-md font-semibold text-dashboard-text-primary"
+            >
+              Send planning PDF
+            </h2>
+            <label className="mt-3 block text-dashboard-sm text-dashboard-text-secondary">
+              Recipient email
+              <input
+                type="email"
+                value={recipientEmail}
+                onChange={(e) => setRecipientEmail(e.target.value)}
+                placeholder="name@company.com"
+                autoComplete="email"
+                className="mt-1 w-full rounded-dashboard-md border border-dashboard-border bg-dashboard-bg px-3 py-2 text-dashboard-sm text-dashboard-text-primary focus:outline-none focus:ring-2 focus:ring-[#5B5FEF]/25"
+              />
+            </label>
+            {emailError && (
+              <p className="mt-2 text-dashboard-xs text-dashboard-status-danger" role="alert">
+                {emailError}
+              </p>
+            )}
+            <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-dashboard-border pt-3">
+              <button
+                type="button"
+                onClick={() => setSendEmailOpen(false)}
+                className="rounded-dashboard-md px-3 py-1.5 text-dashboard-sm font-medium text-dashboard-text-secondary hover:text-dashboard-text-primary"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={emailSending}
+                onClick={() => void handleConfirmSendEmail()}
+                className="rounded-dashboard-md bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] px-4 py-1.5 text-dashboard-sm font-medium text-white shadow-dashboard-card disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                {emailSending ? "Sending…" : "Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       {datePickerOpen && (
         <div
           className="fixed inset-0 z-[100] flex items-center justify-center bg-[#1A1D2E]/40 p-4 backdrop-blur-[2px]"

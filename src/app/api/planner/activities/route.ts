@@ -109,6 +109,7 @@ async function cascadeFromPredecessor(
 }
 
 export async function GET(req: NextRequest) {
+  try {
   const supabase = getSupabaseAdmin();
   const params = req.nextUrl.searchParams;
   const crewId = params.get("crew_id");
@@ -181,6 +182,10 @@ export async function GET(req: NextRequest) {
     .filter((a): a is NonNullable<typeof a> => a !== null);
 
   return NextResponse.json(activities);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
