@@ -42,7 +42,19 @@ async function resolvePdfEngine(): Promise<{
         (chromiumMod.default as unknown as { version?: string; revision?: string }).version ??
         (chromiumMod.default as unknown as { version?: string; revision?: string }).revision ??
         "unknown";
-      const executablePath = await chromiumMod.default.executablePath();
+      let executablePath: string;
+      try {
+        executablePath = await chromiumMod.default.executablePath();
+      } catch (primaryErr) {
+        console.warn("[planner/pdf] primary chromium path failed, using remote pack", {
+          hasRemotePackUrl: Boolean(process.env.CHROMIUM_REMOTE_PACK_URL),
+          details: primaryErr instanceof Error ? primaryErr.message : String(primaryErr),
+        });
+        if (!process.env.CHROMIUM_REMOTE_PACK_URL) {
+          throw primaryErr;
+        }
+        executablePath = await chromiumMod.default.executablePath(process.env.CHROMIUM_REMOTE_PACK_URL);
+      }
       console.info("[planner/pdf] engine resolved", {
         env: { nodeEnv: process.env.NODE_ENV, vercel: isVercel, platform: process.platform },
         branch: "production-serverless",
