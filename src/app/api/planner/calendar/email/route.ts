@@ -74,15 +74,35 @@ export async function POST(request: NextRequest) {
   const peopleLeaves = Array.isArray(b.peopleLeaves)
     ? (b.peopleLeaves as PlannerPeopleLeave[])
     : [];
-  const crewMap =
+  const crewMapRaw =
     b.crewMap && typeof b.crewMap === "object" && !Array.isArray(b.crewMap)
-      ? (b.crewMap as Record<string, string>)
+      ? (b.crewMap as Record<string, unknown>)
       : {};
+  const crewMap: Record<string, string> = Object.fromEntries(
+    Object.entries(crewMapRaw).map(([crewId, value]) => [
+      crewId,
+      typeof value === "string"
+        ? value
+        : value && typeof value === "object" && "name" in value
+          ? String((value as { name?: unknown }).name ?? "—")
+          : "—",
+    ])
+  );
 
   const logoAttachment = getLogoAttachment();
   const siteUrl = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "") || "";
-  const logoSrc = logoAttachment ? `cid:${LOGO_CID}` : siteUrl ? `${siteUrl}/readx-logo.png` : undefined;
+  const pdfLogoSrc = logoAttachment
+    ? `data:image/png;base64,${logoAttachment.content.toString("base64")}`
+    : siteUrl
+      ? `${siteUrl}/readx-logo.png`
+      : undefined;
+  const emailLogoSrc = logoAttachment
+    ? `cid:${LOGO_CID}`
+    : siteUrl
+      ? `${siteUrl}/readx-logo.png`
+      : undefined;
 
+  const reportTitle = `${horizonWeeks} week look ahead`;
   let pdfBuffer: Buffer;
   try {
     const html = buildPlannerCalendarPdfHtml({
@@ -92,7 +112,8 @@ export async function POST(request: NextRequest) {
       activities,
       peopleLeaves,
       crewNames: crewMap,
-      logoSrc,
+      title: reportTitle,
+      logoSrc: pdfLogoSrc,
     });
     pdfBuffer = await generatePlannerCalendarPdf(html);
   } catch (err) {
@@ -103,7 +124,7 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  const fileName = `OnSite-Planner-Calendar_${new Date().toISOString().slice(0, 10)}.pdf`;
+  const fileName = `${reportTitle.replace(/\s+/g, "-")}_${new Date().toISOString().slice(0, 10)}.pdf`;
   const attachments: Array<{
     filename: string;
     content: Buffer;
@@ -112,13 +133,13 @@ export async function POST(request: NextRequest) {
   }> = [{ filename: fileName, content: pdfBuffer, contentType: "application/pdf" }];
   if (logoAttachment) attachments.unshift(logoAttachment);
 
-  const signatureBlock = logoSrc
-    ? getEmailSignatureHtml(logoSrc)
+  const signatureBlock = emailLogoSrc
+    ? getEmailSignatureHtml(emailLogoSrc)
     : `<p style="margin-top:24px;font-size:12px;color:#666;">OnSite Planner · readX</p>`;
 
   const htmlBody = `
 <div style="font-family: Arial, sans-serif; color: #333; padding: 24px;">
-  <h2 style="color: #1a5276;">OnSite Planner — Calendar</h2>
+  <h2 style="color: #1a5276;">${reportTitle}</h2>
   <p>Please find the planning calendar attached (A3 landscape).</p>
   <p style="color: #666; font-size: 13px;">Horizon: ${horizonWeeks} weeks · Week including ${viewAnchorDate}</p>
   ${signatureBlock}
@@ -129,8 +150,8 @@ export async function POST(request: NextRequest) {
     await transporter.sendMail({
       from: getEmailFrom(),
       to: recipientRaw,
-      subject: `OnSite Planner — Calendar — ${new Date().toLocaleDateString("en-AU")}`,
-      text: "Please find the attached OnSite Planner calendar PDF.",
+      subject: `${reportTitle} — ${new Date().toLocaleDateString("en-AU")}`,
+      text: `Please find the attached ${reportTitle} PDF.`,
       html: htmlBody,
       attachments,
     });

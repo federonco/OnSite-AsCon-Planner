@@ -106,7 +106,13 @@ export default function PlannerCalendar({
   const [emailSending, setEmailSending] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
 
-  const crewNamesRecord = useMemo(() => Object.fromEntries(crewMap), [crewMap]);
+  const crewNamesRecord = useMemo(
+    () =>
+      Object.fromEntries(
+        Array.from(crewMap.entries()).map(([crewId, info]) => [crewId, info.name ?? "—"])
+      ),
+    [crewMap]
+  );
 
   const visibleRange = useMemo(
     () => getPlannerHorizonVisibleRange(horizon, activities),
@@ -153,7 +159,8 @@ export default function PlannerCalendar({
         type: "dayGrid" as const,
         duration: { weeks: horizon },
         dayMaxEvents: true,
-        aspectRatio: Math.max(0.55, 2.4 / horizon),
+        /** Keep 4W/6W/8W day cells equal to 2W baseline. */
+        aspectRatio: 1.2,
       },
     }),
     [horizon]
@@ -607,36 +614,38 @@ export default function PlannerCalendar({
           </div>
         </div>
       )}
-      <FullCalendar
-        ref={calendarRef}
-        key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}-w${hideWeekends ? 0 : 1}`}
-        plugins={[dayGridPlugin, interactionPlugin]}
-        initialView="plannerHorizon"
-        initialDate={initialDate}
-        firstDay={1}
-        events={events}
-        editable={true}
-        selectable={true}
-        selectMirror={true}
-        dayMaxEvents={4}
-        views={calendarViews}
-        weekends={!hideWeekends}
-        validRange={validRange}
-        dayCellClassNames={dayCellClassNames}
-        dayCellDidMount={dayCellDidMount}
-        customButtons={customButtons}
-        headerToolbar={{
-          left: "prev,next pickDate",
-          center: "title",
-          right: "",
-        }}
-        eventClick={handleEventClick}
-        eventDrop={handleEventDrop}
-        eventResize={handleEventResize}
-        select={handleDateSelect}
-        height="auto"
-        eventDisplay="block"
-      />
+      <div className="max-h-[min(74vh,calc(100dvh-16rem))] overflow-y-auto overflow-x-hidden">
+          <FullCalendar
+            ref={calendarRef}
+            key={`planner-fc-${horizon}-${validRange.start}-${validRange.end}-w${hideWeekends ? 0 : 1}`}
+            plugins={[dayGridPlugin, interactionPlugin]}
+            initialView="plannerHorizon"
+            initialDate={initialDate}
+            firstDay={1}
+            events={events}
+            editable={true}
+            selectable={true}
+            selectMirror={true}
+            dayMaxEvents={4}
+            views={calendarViews}
+            weekends={!hideWeekends}
+            validRange={validRange}
+            dayCellClassNames={dayCellClassNames}
+            dayCellDidMount={dayCellDidMount}
+            customButtons={customButtons}
+            headerToolbar={{
+              left: "prev,next pickDate",
+              center: "title",
+              right: "",
+            }}
+            eventClick={handleEventClick}
+            eventDrop={handleEventDrop}
+            eventResize={handleEventResize}
+            select={handleDateSelect}
+            height="auto"
+            eventDisplay="block"
+          />
+      </div>
       <p className="mt-3 text-dashboard-xs text-dashboard-text-muted">
         Purple blocks are people leave (read-only).{" "}
         {hideWeekends
