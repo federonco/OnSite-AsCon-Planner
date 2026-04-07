@@ -28,6 +28,7 @@ async function toNodeBuffer(value: unknown): Promise<Buffer> {
   if (value instanceof Uint8Array) return Buffer.from(value);
   if (value instanceof ArrayBuffer) return Buffer.from(new Uint8Array(value));
 
+  // Web ReadableStream (some runtimes)
   if (value && typeof value === "object" && "getReader" in value) {
     const reader = (value as ReadableStream<Uint8Array>).getReader();
     const chunks: Uint8Array[] = [];
@@ -49,7 +50,61 @@ async function toNodeBuffer(value: unknown): Promise<Buffer> {
     return Buffer.from(merged);
   }
 
-  throw new Error(`Unsupported react-pdf buffer output type: ${typeof value}`);
+  // Node.js Readable stream or any async-iterable of chunks
+  if (value && typeof value === "object") {
+    const v = value as Record<string, unknown>;
+    const hasPipe = typeof (v as { pipe?: unknown }).pipe === "function";
+    const hasAsyncIterator =
+      typeof (v as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function";
+
+    if (hasPipe || hasAsyncIterator) {
+      const chunks: Buffer[] = [];
+      for await (const chunk of value as AsyncIterable<unknown>) {
+        if (Buffer.isBuffer(chunk)) chunks.push(chunk);
+        else if (chunk instanceof Uint8Array) chunks.push(Buffer.from(chunk));
+        else if (chunk instanceof ArrayBuffer) chunks.push(Buffer.from(new Uint8Array(chunk)));
+        else if (typeof chunk === "string") chunks.push(Buffer.from(chunk));
+        else if (chunk == null) continue;
+        else {
+          console.warn("[planner/pdf] react-pdf chunk unsupported, coercing to string", {
+            typeofChunk: typeof chunk,
+            ctor: (chunk as { constructor?: { name?: string } } | null)?.constructor?.name ?? null,
+          });
+          chunks.push(Buffer.from(String(chunk)));
+        }
+      }
+      return Buffer.concat(chunks);
+    }
+
+    // Some libraries wrap streams in an object (e.g., { body: stream })
+    for (const key of ["body", "data", "stream", "readable"] as const) {
+      const inner = v[key];
+      if (inner && typeof inner === "object") {
+        const innerHasPipe = typeof (inner as { pipe?: unknown }).pipe === "function";
+        const innerHasAsyncIterator =
+          typeof (inner as { [Symbol.asyncIterator]?: unknown })[Symbol.asyncIterator] === "function";
+        if (innerHasPipe || innerHasAsyncIterator) {
+          return await toNodeBuffer(inner);
+        }
+      }
+    }
+
+    console.error("[planner/pdf] Unsupported react-pdf render output", {
+      typeofValue: typeof value,
+      constructorName: (value as { constructor?: { name?: string } } | null)?.constructor?.name ?? null,
+      hasPipe,
+      hasAsyncIterator,
+      keys: Object.keys(v).slice(0, 20),
+    });
+  }
+
+  throw new Error(
+    `Unsupported react-pdf buffer output type: ${typeof value}${
+      value && typeof value === "object"
+        ? ` (constructor=${(value as { constructor?: { name?: string } } | null)?.constructor?.name ?? "unknown"})`
+        : ""
+    }`
+  );
 }
 
 /** React-PDF generator (Chromium-free) for planner email export. */
