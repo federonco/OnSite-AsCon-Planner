@@ -8,7 +8,7 @@ import {
   LOGO_CID,
 } from "@/lib/email-config";
 import { buildPlannerCalendarPdfHtml } from "@/lib/reporting/planner-calendar-email-html";
-import { generatePlannerCalendarPdf } from "@/lib/reporting/planner-calendar-pdf";
+import { generatePlannerCalendarPdf, PdfGenerationError } from "@/lib/reporting/planner-calendar-pdf";
 import type { PlannerActivity, PlannerPeopleLeave } from "@/lib/planner-types";
 
 export const runtime = "nodejs";
@@ -105,6 +105,13 @@ export async function POST(request: NextRequest) {
   const reportTitle = `${horizonWeeks} week look ahead`;
   let pdfBuffer: Buffer;
   try {
+    console.info("[planner/calendar/email] PDF start", {
+      env: {
+        nodeEnv: process.env.NODE_ENV,
+        vercel: Boolean(process.env.VERCEL),
+        region: process.env.VERCEL_REGION ?? null,
+      },
+    });
     const html = buildPlannerCalendarPdfHtml({
       horizonWeeks,
       hideWeekends,
@@ -118,8 +125,14 @@ export async function POST(request: NextRequest) {
     pdfBuffer = await generatePlannerCalendarPdf(html);
   } catch (err) {
     console.error("[planner/calendar/email] PDF failed:", err);
+    const details =
+      err instanceof PdfGenerationError
+        ? `stage=${err.stage}${err.details ? `; details=${err.details}` : ""}`
+        : err instanceof Error
+          ? err.message
+          : String(err);
     return NextResponse.json(
-      { error: `PDF generation failed: ${err instanceof Error ? err.message : String(err)}` },
+      { error: `PDF generation failed: ${details}` },
       { status: 500 }
     );
   }
@@ -147,6 +160,7 @@ export async function POST(request: NextRequest) {
 
   try {
     const transporter = createEmailTransporter();
+    console.info("[planner/calendar/email] email send start");
     await transporter.sendMail({
       from: getEmailFrom(),
       to: recipientRaw,
@@ -159,7 +173,11 @@ export async function POST(request: NextRequest) {
   } catch (err) {
     console.error("[planner/calendar/email] sendMail failed:", err);
     return NextResponse.json(
-      { error: "Email send failed. PDF was generated but could not be sent." },
+      {
+        error: `Email sending failed: ${
+          err instanceof Error ? err.message : "PDF was generated but could not be sent."
+        }`,
+      },
       { status: 500 }
     );
   }
