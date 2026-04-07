@@ -7,7 +7,6 @@ import {
   hasEmailConfig,
   LOGO_CID,
 } from "@/lib/email-config";
-import { buildPlannerCalendarPdfHtml } from "@/lib/reporting/planner-calendar-email-html";
 import { generatePlannerCalendarPdf, PdfGenerationError } from "@/lib/reporting/planner-calendar-pdf";
 import type { PlannerActivity, PlannerPeopleLeave } from "@/lib/planner-types";
 
@@ -112,17 +111,16 @@ export async function POST(request: NextRequest) {
         region: process.env.VERCEL_REGION ?? null,
       },
     });
-    const html = buildPlannerCalendarPdfHtml({
+    pdfBuffer = await generatePlannerCalendarPdf({
+      title: reportTitle,
       horizonWeeks,
       hideWeekends,
       viewAnchorDate,
       activities,
       peopleLeaves,
       crewNames: crewMap,
-      title: reportTitle,
       logoSrc: pdfLogoSrc,
     });
-    pdfBuffer = await generatePlannerCalendarPdf(html);
   } catch (err) {
     console.error("[planner/calendar/email] PDF failed:", err);
     const details =
