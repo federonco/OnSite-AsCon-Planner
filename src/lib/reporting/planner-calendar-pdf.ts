@@ -29,13 +29,24 @@ async function resolvePdfEngine(): Promise<{
 
   // On Vercel/prod we must use sparticuz chromium, never local desktop browser.
   if (shouldUseServerlessChromium) {
+    const pathOverrides = {
+      LOCAL_CHROME_PATH: process.env.LOCAL_CHROME_PATH || null,
+      PUPPETEER_EXECUTABLE_PATH: process.env.PUPPETEER_EXECUTABLE_PATH || null,
+      CHROME_EXECUTABLE_PATH: process.env.CHROME_EXECUTABLE_PATH || null,
+      CHROMIUM_PATH: process.env.CHROMIUM_PATH || null,
+    };
+    const hasOverride = Object.values(pathOverrides).some(Boolean);
     try {
       const chromiumMod = await import("@sparticuz/chromium");
       const executablePath = await chromiumMod.default.executablePath();
       console.info("[planner/pdf] engine resolved", {
         env: { nodeEnv: process.env.NODE_ENV, vercel: isVercel, platform: process.platform },
+        branch: "production-serverless",
         engine: "sparticuz",
         pathSource: "sparticuz",
+        customPathOverrideFound: hasOverride,
+        customPathOverrideIgnored: hasOverride,
+        executablePath,
       });
       return { executablePath, useServerlessChromium: true, pathSource: "sparticuz" };
     } catch (err) {
@@ -109,7 +120,7 @@ export async function generatePlannerCalendarPdf(html: string): Promise<Buffer> 
       args: launchArgs,
       defaultViewport: launchViewport,
       executablePath,
-      headless: true,
+      headless: useServerlessChromium ? chromiumMod!.default.headless : true,
     });
   } catch (err) {
     throw new PdfGenerationError(
