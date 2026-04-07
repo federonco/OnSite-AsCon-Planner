@@ -38,11 +38,16 @@ async function resolvePdfEngine(): Promise<{
     const hasOverride = Object.values(pathOverrides).some(Boolean);
     try {
       const chromiumMod = await import("@sparticuz/chromium");
+      const chromiumVersion =
+        (chromiumMod.default as unknown as { version?: string; revision?: string }).version ??
+        (chromiumMod.default as unknown as { version?: string; revision?: string }).revision ??
+        "unknown";
       const executablePath = await chromiumMod.default.executablePath();
       console.info("[planner/pdf] engine resolved", {
         env: { nodeEnv: process.env.NODE_ENV, vercel: isVercel, platform: process.platform },
         branch: "production-serverless",
         engine: "sparticuz",
+        chromiumVersion,
         pathSource: "sparticuz",
         customPathOverrideFound: hasOverride,
         customPathOverrideIgnored: hasOverride,
@@ -106,7 +111,7 @@ export async function generatePlannerCalendarPdf(html: string): Promise<Buffer> 
     ? chromiumMod!.default.args
     : ["--no-sandbox", "--disable-setuid-sandbox"];
   const launchViewport = useServerlessChromium
-    ? chromiumMod!.default.defaultViewport
+    ? { width: 1920, height: 1080, deviceScaleFactor: 1 }
     : { width: 1400, height: 900 };
 
   let browser: Awaited<ReturnType<typeof puppeteer.launch>> | null = null;
@@ -120,7 +125,7 @@ export async function generatePlannerCalendarPdf(html: string): Promise<Buffer> 
       args: launchArgs,
       defaultViewport: launchViewport,
       executablePath,
-      headless: useServerlessChromium ? chromiumMod!.default.headless : true,
+      headless: useServerlessChromium ? "shell" : true,
     });
   } catch (err) {
     throw new PdfGenerationError(
