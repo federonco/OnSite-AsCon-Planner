@@ -7,7 +7,6 @@ import { COST_CATEGORY_LABELS } from "@/lib/planner-constants";
 import { formatCost } from "@/lib/planner-cost-utils";
 
 type CatFilter = "all" | CostCategory;
-type SortKey = "sort_order" | "name_asc" | "name_desc" | "rate_asc" | "rate_desc";
 
 const inputClass =
   "w-full rounded-dashboard-md border border-dashboard-border bg-dashboard-surface px-3 py-2 text-dashboard-sm text-dashboard-text-primary placeholder:text-dashboard-text-muted focus:outline-none focus:ring-2 focus:ring-[#5B5FEF]/25 focus:border-dashboard-primary";
@@ -27,7 +26,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
 
   const [search, setSearch] = useState("");
   const [catFilter, setCatFilter] = useState<CatFilter>("all");
-  const [sortKey, setSortKey] = useState<SortKey>("sort_order");
 
 
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -152,27 +150,12 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
       );
     });
     rows = [...rows];
-    switch (sortKey) {
-      case "name_asc":
-        rows.sort((a, b) => a.name.localeCompare(b.name));
-        break;
-      case "name_desc":
-        rows.sort((a, b) => b.name.localeCompare(a.name));
-        break;
-      case "rate_asc":
-        rows.sort((a, b) => Number(a.unit_rate) - Number(b.unit_rate));
-        break;
-      case "rate_desc":
-        rows.sort((a, b) => Number(b.unit_rate) - Number(a.unit_rate));
-        break;
-      default:
-        rows.sort(
-          (a, b) =>
-            (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name)
-        );
-    }
+    rows.sort(
+      (a, b) =>
+        (a.sort_order ?? 0) - (b.sort_order ?? 0) || a.name.localeCompare(b.name)
+    );
     return rows;
-  }, [items, search, catFilter, sortKey]);
+  }, [items, search, catFilter]);
 
   const beginEdit = (row: PlannerCostCatalogueItem) => {
     setEditingId(row.id);
@@ -571,7 +554,7 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
           </div>
 
           <div className="mb-4 flex flex-col gap-3 lg:flex-row lg:items-end">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0 flex-[2] lg:flex-[3]">
               <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
                 Search
               </label>
@@ -598,22 +581,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                   {c === "all" ? "All categories" : COST_CATEGORY_LABELS[c]}
                 </button>
               ))}
-            </div>
-            <div className="w-full min-w-[10rem] lg:w-48">
-              <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
-                Sort
-              </label>
-              <select
-                value={sortKey}
-                onChange={(e) => setSortKey(e.target.value as SortKey)}
-                className={inputClass}
-              >
-                <option value="sort_order">Catalogue order</option>
-                <option value="name_asc">Name A–Z</option>
-                <option value="name_desc">Name Z–A</option>
-                <option value="rate_asc">Rate (low → high)</option>
-                <option value="rate_desc">Rate (high → low)</option>
-              </select>
             </div>
             <div className="w-full lg:w-auto">
               <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
