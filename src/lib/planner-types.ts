@@ -130,6 +130,7 @@ export interface PlannerCostCatalogueItem {
   id: string;
   category: CostCategory;
   name: string;
+  company?: string | null;
   description: string | null;
   cost_code?: string | null;
   source_group?: string | null;

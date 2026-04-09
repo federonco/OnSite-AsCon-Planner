@@ -76,3 +76,47 @@ export async function POST(req: NextRequest) {
   }
 }
 
+export async function PUT(req: NextRequest) {
+  try {
+    const supabase = getSupabaseAdmin();
+    const body = await req.json();
+
+    const id = String(body.id ?? "").trim();
+    if (!id) return NextResponse.json({ error: "id is required" }, { status: 400 });
+
+    const updates: Record<string, unknown> = {};
+    if ("code" in body) {
+      const code = String(body.code ?? "").trim();
+      if (!code) return NextResponse.json({ error: "code cannot be empty" }, { status: 400 });
+      updates.code = code;
+    }
+    if ("label" in body) {
+      updates.label =
+        body.label != null && String(body.label).trim() !== "" ? String(body.label).trim() : null;
+    }
+    if ("sort_order" in body) {
+      updates.sort_order = Number.isFinite(Number(body.sort_order)) ? Number(body.sort_order) : 0;
+    }
+    if ("is_active" in body) {
+      updates.is_active = Boolean(body.is_active);
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
+    }
+
+    const { data, error } = await supabase
+      .from("planner_wbs")
+      .update(updates)
+      .eq("id", id)
+      .select("*")
+      .single();
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(data);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Server error";
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+

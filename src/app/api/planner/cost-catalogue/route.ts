@@ -54,10 +54,15 @@ export async function POST(req: NextRequest) {
       body.cost_code != null && String(body.cost_code).trim() !== ""
         ? String(body.cost_code).trim()
         : null;
+    const company =
+      body.company != null && String(body.company).trim() !== ""
+        ? String(body.company).trim()
+        : null;
 
     const row = {
       category: sanitizeCategory(body.category),
       name,
+      company,
       description:
         body.description != null && String(body.description).trim() !== ""
           ? String(body.description).trim()
@@ -70,9 +75,10 @@ export async function POST(req: NextRequest) {
     };
 
     const inserted = await supabase.from("planner_cost_catalogue").insert(row).select("*").single();
-    if (inserted.error && inserted.error.message.toLowerCase().includes("cost_code")) {
-      const { cost_code, ...fallback } = row;
+    if (inserted.error && (inserted.error.message.toLowerCase().includes("cost_code") || inserted.error.message.toLowerCase().includes("company"))) {
+      const { cost_code, company, ...fallback } = row;
       void cost_code;
+      void company;
       const retry = await supabase
         .from("planner_cost_catalogue")
         .insert(fallback)
@@ -116,6 +122,12 @@ export async function PUT(req: NextRequest) {
           ? String(body.cost_code).trim()
           : null;
     }
+    if ("company" in body) {
+      updates.company =
+        body.company != null && String(body.company).trim() !== ""
+          ? String(body.company).trim()
+          : null;
+    }
     if ("unit" in body) {
       const u = String(body.unit ?? "").trim();
       if (!u) return NextResponse.json({ error: "unit cannot be empty" }, { status: 400 });
@@ -144,9 +156,10 @@ export async function PUT(req: NextRequest) {
       .select("*")
       .single();
 
-    if (error && error.message.toLowerCase().includes("cost_code")) {
-      const { cost_code, ...fallback } = updates;
+    if (error && (error.message.toLowerCase().includes("cost_code") || error.message.toLowerCase().includes("company"))) {
+      const { cost_code, company, ...fallback } = updates;
       void cost_code;
+      void company;
       const retry = await supabase
         .from("planner_cost_catalogue")
         .update(fallback)

@@ -43,15 +43,17 @@ export async function POST(req: NextRequest) {
 
     // Deterministic matching: normalized category + name + unit + (cost_code when present)
     let hasCostCodeColumn = true;
+    let hasCompanyColumn = true;
     let existing: unknown[] = [];
     {
       const res = await supabase
         .from("planner_cost_catalogue")
-        .select("id, category, name, unit, cost_code");
+        .select("id, category, name, unit, cost_code, company");
       if (res.error) {
         // Backward compatible: allow running before `cost_code` migration applied.
-        if (res.error.message.toLowerCase().includes("cost_code")) {
-          hasCostCodeColumn = false;
+        if (res.error.message.toLowerCase().includes("cost_code") || res.error.message.toLowerCase().includes("company")) {
+          hasCostCodeColumn = !res.error.message.toLowerCase().includes("cost_code");
+          hasCompanyColumn = !res.error.message.toLowerCase().includes("company");
           const fallback = await supabase
             .from("planner_cost_catalogue")
             .select("id, category, name, unit");
@@ -86,6 +88,7 @@ export async function POST(req: NextRequest) {
     type InsertRow = {
       category: CostCategory;
       name: string;
+      company: string | null;
       description: string | null;
       unit: string;
       unit_rate: number;
@@ -109,6 +112,7 @@ export async function POST(req: NextRequest) {
       const payload: InsertRow = {
         category: it.category,
         name: it.name,
+        company: hasCompanyColumn ? it.company : null,
         description: it.description,
         unit: it.unit,
         unit_rate: it.unit_rate,
@@ -136,15 +140,38 @@ export async function POST(req: NextRequest) {
     let updated = 0;
 
     if (toInsert.length) {
-      const { error } = await supabase.from("planner_cost_catalogue").insert(toInsert);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      inserted = toInsert.length;
+      const insertedRes = await supabase.from("planner_cost_catalogue").insert(toInsert);
+      if (insertedRes.error && insertedRes.error.message.toLowerCase().includes("company")) {
+        hasCompanyColumn = false;
+        const fallbackRows = toInsert.map(({ company, ...r }) => {
+          void company;
+          return r;
+        });
+        const fallbackInsert = await supabase.from("planner_cost_catalogue").insert(fallbackRows);
+        if (fallbackInsert.error) return NextResponse.json({ error: fallbackInsert.error.message }, { status: 500 });
+        inserted = fallbackRows.length;
+      } else if (insertedRes.error) {
+        return NextResponse.json({ error: insertedRes.error.message }, { status: 500 });
+      } else {
+        inserted = toInsert.length;
+      }
     }
 
     if (toUpsertById.length) {
-      const { error } = await supabase.from("planner_cost_catalogue").upsert(toUpsertById);
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-      updated = toUpsertById.length;
+      const upsertRes = await supabase.from("planner_cost_catalogue").upsert(toUpsertById);
+      if (upsertRes.error && upsertRes.error.message.toLowerCase().includes("company")) {
+        const fallbackRows = toUpsertById.map(({ company, ...r }) => {
+          void company;
+          return r;
+        });
+        const fallbackUpsert = await supabase.from("planner_cost_catalogue").upsert(fallbackRows);
+        if (fallbackUpsert.error) return NextResponse.json({ error: fallbackUpsert.error.message }, { status: 500 });
+        updated = fallbackRows.length;
+      } else if (upsertRes.error) {
+        return NextResponse.json({ error: upsertRes.error.message }, { status: 500 });
+      } else {
+        updated = toUpsertById.length;
+      }
     }
 
     return NextResponse.json({

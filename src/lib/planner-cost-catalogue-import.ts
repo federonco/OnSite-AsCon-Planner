@@ -4,6 +4,7 @@ import type { CostCategory } from "@/lib/planner-types";
 export interface ImportedCatalogueItem {
   category: CostCategory;
   name: string;
+  company: string | null;
   description: string | null;
   unit: string;
   unit_rate: number;
@@ -154,6 +155,7 @@ export function parseCostosCurrentWorkbook(buffer: ArrayBuffer): {
     out.push({
       category,
       name: cleanString(name),
+      company: company ? cleanString(company) : null,
       description: description ? cleanString(description) : null,
       unit,
       unit_rate: rate,
