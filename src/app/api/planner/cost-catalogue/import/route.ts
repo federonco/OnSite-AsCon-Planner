@@ -8,11 +8,6 @@ import type { CostCategory } from "@/lib/planner-types";
 
 export const dynamic = "force-dynamic";
 
-function asStringOrNull(v: unknown): string | null {
-  const s = String(v ?? "").trim();
-  return s ? s : null;
-}
-
 function getString(obj: unknown, key: string): string {
   if (!obj || typeof obj !== "object") return "";
   const v = (obj as Record<string, unknown>)[key];
