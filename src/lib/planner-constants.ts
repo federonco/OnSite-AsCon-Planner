@@ -47,3 +47,17 @@ export const CREW_COLOR_PALETTE = [
 export function getCrewColor(index: number): string {
   return CREW_COLOR_PALETTE[index % CREW_COLOR_PALETTE.length];
 }
+
+/** Cost record category labels */
+export const COST_CATEGORY_LABELS: Record<import("./planner-types").CostCategory, string> = {
+  machinery: "Machinery",
+  labour: "Labor",
+  materials: "Material",
+};
+
+/** Cost record category colors */
+export const COST_CATEGORY_COLORS: Record<import("./planner-types").CostCategory, string> = {
+  machinery: "#7C3AED",
+  labour: "#3B8BD4",
+  materials: "#1D9E75",
+};

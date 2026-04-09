@@ -38,7 +38,8 @@
       "Bash(lsof -ti:3001)",
       "Bash(xargs kill:*)",
       "Bash(netstat -ano)",
-      "Bash(taskkill //PID 4316 //F)"
+      "Bash(taskkill //PID 4316 //F)",
+      "Bash(grep -E \"\\\\.ts$\")"
     ]
   }
 }

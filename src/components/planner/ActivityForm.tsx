@@ -6,14 +6,17 @@ import {
   PlannerActivity,
   CreateActivityPayload,
   UpdateActivityPayload,
+  PlannerAssignedCostEntry,
   ACTIVITY_STATUSES,
   ActivityStatus,
   type DrainerSectionListItem,
 } from "@/lib/planner-types";
+import ActivityCostSection from "./ActivityCostSection";
 
 const STATUS_PICKER_OPTIONS = ACTIVITY_STATUSES.filter((s) => s !== "blocked");
 import { ACTIVITY_STATUS_COLORS, ACTIVITY_STATUS_LABELS } from "@/lib/planner-constants";
 import { countWaWorkingDaysInclusive } from "@/lib/wa-public-holidays";
+import { calendarSpanInclusiveDays } from "@/lib/planner-date";
 import { differenceInCalendarDays } from "date-fns";
 
 const kebabIcon = (
@@ -37,6 +40,8 @@ interface ActivityFormProps {
   defaultDate?: string | null;
   /** Prefill section (e.g. from planner section filter) */
   defaultSectionId?: string | null;
+  /** When true, Escape does not close the activity form (e.g. global planner modal is open). */
+  suppressEscapeClose?: boolean;
   onSave: (payload: CreateActivityPayload | UpdateActivityPayload) => Promise<void>;
   onDelete?: (id: string) => Promise<void>;
   onClose: () => void;
@@ -49,6 +54,7 @@ export default function ActivityForm({
   defaultCrewId,
   defaultDate,
   defaultSectionId,
+  suppressEscapeClose = false,
   onSave,
   onDelete,
   onClose,
@@ -65,6 +71,16 @@ export default function ActivityForm({
   );
   const [notes, setNotes] = useState(activity?.notes || "");
   const [wbsCode, setWbsCode] = useState(activity?.wbs_code || "");
+  const [wbsOptions, setWbsOptions] = useState<Array<{ code: string; label: string | null }>>([]);
+  const [wbsLoading, setWbsLoading] = useState(false);
+  const [wbsError, setWbsError] = useState<string | null>(null);
+  const [wbsKebabOpen, setWbsKebabOpen] = useState(false);
+  const [createWbsOpen, setCreateWbsOpen] = useState(false);
+  const [newWbsCode, setNewWbsCode] = useState("");
+  const [newWbsLabel, setNewWbsLabel] = useState("");
+  const [creatingWbs, setCreatingWbs] = useState(false);
+  const [createWbsError, setCreateWbsError] = useState<string | null>(null);
+  const wbsKebabRef = useRef<HTMLDivElement>(null);
   const [drainerSectionId, setDrainerSectionId] = useState(
     () => activity?.drainer_section_id ?? defaultSectionId ?? ""
   );
@@ -89,6 +105,16 @@ export default function ActivityForm({
   const [creatingSection, setCreatingSection] = useState(false);
   const [createSectionError, setCreateSectionError] = useState<string | null>(null);
   const sectionKebabRef = useRef<HTMLDivElement>(null);
+  const [budgetAmount, setBudgetAmount] = useState(
+    () => activity?.budget_amount != null ? String(activity.budget_amount) : ""
+  );
+  const [draftCostEntries, setDraftCostEntries] = useState<PlannerAssignedCostEntry[]>(() =>
+    (activity?.cost_entries ?? []).map((e) => ({
+      ...e,
+      override_unit_rate: e.override_unit_rate ?? null,
+    }))
+  );
+  const [costsModalOpen, setCostsModalOpen] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
@@ -130,10 +156,101 @@ export default function ActivityForm({
       if (sectionKebabRef.current && !sectionKebabRef.current.contains(e.target as Node)) {
         setSectionKebabOpen(false);
       }
+      if (wbsKebabRef.current && !wbsKebabRef.current.contains(e.target as Node)) {
+        setWbsKebabOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setWbsLoading(true);
+    setWbsError(null);
+    (async () => {
+      try {
+        const res = await fetch("/api/planner/wbs");
+        const body: unknown = await res.json().catch(() => null);
+        if (!res.ok) {
+          const msg =
+            body && typeof body === "object" && "error" in body && typeof (body as Record<string, unknown>).error === "string"
+              ? String((body as Record<string, unknown>).error)
+              : res.statusText;
+          throw new Error(msg);
+        }
+        const rows = Array.isArray(body) ? body : [];
+        const mapped = rows
+          .map((r) => ({
+            code: String((r as Record<string, unknown>)?.code ?? "").trim(),
+            label:
+              (r as Record<string, unknown>)?.label != null && String((r as Record<string, unknown>).label).trim() !== ""
+                ? String((r as Record<string, unknown>).label).trim()
+                : null,
+          }))
+          .filter((r) => r.code);
+        if (!cancelled) setWbsOptions(mapped);
+      } catch (e) {
+        if (!cancelled) {
+          setWbsOptions([]);
+          setWbsError(e instanceof Error ? e.message : "Could not load WBS list");
+        }
+      } finally {
+        if (!cancelled) setWbsLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const handleCreateWbs = async () => {
+    const code = newWbsCode.trim();
+    if (!code) return;
+    setCreatingWbs(true);
+    setCreateWbsError(null);
+    try {
+      const res = await fetch("/api/planner/wbs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          code,
+          label: newWbsLabel.trim() || null,
+          sort_order: wbsOptions.length,
+        }),
+      });
+      const body: unknown = await res.json().catch(() => ({}));
+      const err =
+        body && typeof body === "object" && "error" in body && typeof (body as Record<string, unknown>).error === "string"
+          ? String((body as Record<string, unknown>).error)
+          : null;
+      if (!res.ok) throw new Error(err || res.statusText);
+      const createdCode =
+        body && typeof body === "object" && "code" in body
+          ? String((body as Record<string, unknown>).code ?? code).trim()
+          : code;
+      setWbsCode(createdCode);
+      // refresh list lightly
+      setWbsOptions((prev) => {
+        const next = prev.filter((p) => p.code !== createdCode);
+        const label =
+          body && typeof body === "object" && "label" in body
+            ? (body as Record<string, unknown>).label != null ? String((body as Record<string, unknown>).label) : null
+            : null;
+        next.push({ code: createdCode, label: label && label.trim() ? label.trim() : null });
+        next.sort((a, b) => a.code.localeCompare(b.code));
+        return next;
+      });
+      setCreateWbsOpen(false);
+      setWbsKebabOpen(false);
+      setNewWbsCode("");
+      setNewWbsLabel("");
+    } catch (e) {
+      setCreateWbsError(e instanceof Error ? e.message : "Could not create WBS");
+    } finally {
+      setCreatingWbs(false);
+    }
+  };
 
   const prevCrewRef = useRef<string | null>(null);
   useEffect(() => {
@@ -158,6 +275,11 @@ export default function ActivityForm({
     return { calendarDays, waWorking };
   }, [startDate, endDate]);
 
+  const durationDaysForCosts = useMemo(() => {
+    if (!startDate || !endDate) return 1;
+    return calendarSpanInclusiveDays(startDate, endDate);
+  }, [startDate, endDate]);
+
   const predecessorOptions = useMemo(
     () =>
       activities
@@ -168,11 +290,17 @@ export default function ActivityForm({
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (suppressEscapeClose) return;
+      if (costsModalOpen) {
+        setCostsModalOpen(false);
+        return;
+      }
+      onClose();
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [onClose]);
+  }, [onClose, costsModalOpen, suppressEscapeClose]);
 
   const handleDeleteClick = async () => {
     if (!activity || !onDelete) return;
@@ -238,6 +366,7 @@ export default function ActivityForm({
         const depType =
           linkMode === "none" ? null : linkMode === "after" ? "FS" : "SS";
         const depLag = linkMode === "start_after_start" ? Math.max(0, Math.round(linkLagDays)) : 0;
+        const parsedBudget = Number(budgetAmount);
         const payload: UpdateActivityPayload = {
           id: activity!.id,
           name: name.trim(),
@@ -251,12 +380,15 @@ export default function ActivityForm({
           predecessor_id: linkMode === "none" ? null : predecessorId || null,
           dependency_type: depType,
           dependency_lag_days: depType ? depLag : null,
+          budget_amount: budgetAmount.trim() !== "" && Number.isFinite(parsedBudget) ? parsedBudget : null,
+          cost_entries: draftCostEntries,
         };
         await onSave(payload);
       } else {
         const depType =
           linkMode === "none" ? null : linkMode === "after" ? "FS" : "SS";
         const depLag = linkMode === "start_after_start" ? Math.max(0, Math.round(linkLagDays)) : 0;
+        const parsedBudgetCreate = Number(budgetAmount);
         const payload: CreateActivityPayload = {
           crew_id: crewId,
           name: name.trim(),
@@ -270,6 +402,8 @@ export default function ActivityForm({
           predecessor_id: linkMode === "none" ? null : predecessorId || null,
           dependency_type: depType,
           dependency_lag_days: depType ? depLag : null,
+          budget_amount: budgetAmount.trim() !== "" && Number.isFinite(parsedBudgetCreate) ? parsedBudgetCreate : null,
+          cost_entries: draftCostEntries,
         };
         await onSave(payload);
       }
@@ -348,14 +482,142 @@ export default function ActivityForm({
               </select>
             </div>
             <div>
-              <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">WBS Code</label>
-              <input
-                type="text"
-                value={wbsCode}
-                onChange={(e) => setWbsCode(e.target.value)}
-                placeholder="e.g. 1.2.3"
-                className={inputClass}
-              />
+              <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">WBS</label>
+              <div className="flex gap-2">
+                <div className="min-w-0 flex-1">
+                  <input
+                    type="text"
+                    value={wbsCode}
+                    onChange={(e) => setWbsCode(e.target.value)}
+                    placeholder={wbsLoading ? "Loading WBS…" : "e.g. 1.2.3"}
+                    className={inputClass}
+                    list="planner-wbs-options"
+                    disabled={wbsLoading}
+                  />
+                  <datalist id="planner-wbs-options">
+                    {wbsOptions.map((w) => (
+                      <option
+                        key={w.code}
+                        value={w.code}
+                        label={w.label ? `${w.code} — ${w.label}` : w.code}
+                      />
+                    ))}
+                  </datalist>
+                  {wbsError && (
+                    <p className="mt-1 text-dashboard-xs text-dashboard-status-danger">{wbsError}</p>
+                  )}
+                </div>
+                <div className="relative shrink-0 self-center" ref={wbsKebabRef}>
+                  <IconButton
+                    label="WBS options"
+                    type="button"
+                    disabled={wbsLoading}
+                    onClick={() => {
+                      setWbsKebabOpen((o) => !o);
+                      setCreateWbsOpen(false);
+                    }}
+                  >
+                    {kebabIcon}
+                  </IconButton>
+                  {wbsKebabOpen && (
+                    <div
+                      className="absolute right-0 top-full z-[60] mt-1 min-w-[200px] rounded-dashboard-md border border-dashboard-border bg-dashboard-surface py-1 shadow-dashboard-card"
+                      role="menu"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="w-full px-3 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
+                        onClick={() => {
+                          setWbsKebabOpen(false);
+                          setCreateWbsOpen(true);
+                          setCreateWbsError(null);
+                          setNewWbsCode("");
+                          setNewWbsLabel("");
+                        }}
+                      >
+                        Create new WBS
+                      </button>
+                      {wbsCode.trim() && (
+                        <button
+                          type="button"
+                          role="menuitem"
+                          className="w-full px-3 py-2 text-left text-dashboard-sm text-dashboard-text-secondary transition-colors hover:bg-dashboard-bg"
+                          onClick={() => {
+                            setWbsCode("");
+                            setWbsKebabOpen(false);
+                          }}
+                        >
+                          Clear WBS
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+              {createWbsOpen && (
+                <div className="mt-3 space-y-3 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
+                  <p className="text-dashboard-sm font-semibold text-dashboard-text-primary">Create WBS</p>
+                  {createWbsError && (
+                    <p className="text-dashboard-xs text-dashboard-status-danger" role="alert">
+                      {createWbsError}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                        Code *
+                      </label>
+                      <input
+                        type="text"
+                        value={newWbsCode}
+                        onChange={(e) => setNewWbsCode(e.target.value)}
+                        placeholder="e.g. 1.2.3"
+                        className={inputClass}
+                        disabled={creatingWbs}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                        Label
+                      </label>
+                      <input
+                        type="text"
+                        value={newWbsLabel}
+                        onChange={(e) => setNewWbsLabel(e.target.value)}
+                        placeholder="Short description"
+                        className={inputClass}
+                        disabled={creatingWbs}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={creatingWbs || !newWbsCode.trim()}
+                      onClick={() => void handleCreateWbs()}
+                      className="rounded-dashboard-sm bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] px-3 py-1.5 text-dashboard-sm font-medium text-white shadow-dashboard-card disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {creatingWbs ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={creatingWbs}
+                      onClick={() => {
+                        setCreateWbsOpen(false);
+                        setNewWbsCode("");
+                        setNewWbsLabel("");
+                        setCreateWbsError(null);
+                      }}
+                      className="rounded-dashboard-sm bg-dashboard-surface px-3 py-1.5 text-dashboard-sm font-medium text-dashboard-text-secondary hover:bg-dashboard-border/30"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 
@@ -607,6 +869,23 @@ export default function ActivityForm({
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
               className={`${inputClass} resize-none`}
+            />
+          </div>
+
+          <div className="rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
+            <ActivityCostSection
+              activityId={activity?.id ?? null}
+              activityTitle={name.trim() || (isEditing ? "Activity" : "New activity")}
+              budgetAmount={budgetAmount}
+              progressPercent={progressPercent}
+              durationDays={durationDaysForCosts}
+              defaultCostDate={startDate || new Date().toISOString().slice(0, 10)}
+              costsOpen={costsModalOpen}
+              onCostsOpenChange={setCostsModalOpen}
+              onBudgetChange={setBudgetAmount}
+              draftEntries={draftCostEntries}
+              onDraftEntriesChange={setDraftCostEntries}
+              inputClass={inputClass}
             />
           </div>
 

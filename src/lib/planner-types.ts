@@ -36,6 +36,10 @@ export interface PlannerActivity {
   updated_at: string;
   /** Present when row was created via XML import (column nullable until migration applied). */
   import_meta?: Record<string, unknown> | null;
+  /** Budget baseline for cost tracking (nullable — not every activity has a budget). */
+  budget_amount: number | null;
+  /** Assigned cost lines stored in planner_activities.cost_entries JSONB. */
+  cost_entries?: PlannerAssignedCostEntry[];
 }
 
 export interface PlannerDependency {
@@ -85,6 +89,8 @@ export interface CreateActivityPayload {
   predecessor_id?: string | null;
   dependency_type?: DependencyType | null;
   dependency_lag_days?: number | null;
+  budget_amount?: number | null;
+  cost_entries?: PlannerAssignedCostEntry[];
 }
 
 /** Payload for updating an activity (all fields optional except id) */
@@ -103,6 +109,8 @@ export interface UpdateActivityPayload {
   predecessor_id?: string | null;
   dependency_type?: DependencyType | null;
   dependency_lag_days?: number | null;
+  budget_amount?: number | null;
+  cost_entries?: PlannerAssignedCostEntry[];
 }
 
 /** Drainer progress summary for a section */
@@ -111,6 +119,105 @@ export interface DrainerProgress {
   total_segments: number;
   installed_count: number;
   backfilled_count: number;
+  progress_percent: number;
+}
+
+/** Top-level cost categories used by catalogue + assignment */
+export const COST_CATEGORIES = ["machinery", "labour", "materials"] as const;
+export type CostCategory = (typeof COST_CATEGORIES)[number];
+
+export interface PlannerCostCatalogueItem {
+  id: string;
+  category: CostCategory;
+  name: string;
+  description: string | null;
+  cost_code?: string | null;
+  source_group?: string | null;
+  source_meta?: Record<string, unknown> | null;
+  unit: string;
+  unit_rate: number;
+  is_active: boolean;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PlannerWbsItem {
+  id: string;
+  code: string;
+  label: string | null;
+  sort_order: number;
+  is_active: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface CostRecord {
+  id: string;
+  activity_id: string;
+  catalogue_item_id: string | null;
+  name: string;
+  unit: string;
+  /** Catalogue / baseline rate per unit */
+  unit_rate: number;
+  /** When set, amount uses this instead of unit_rate */
+  override_unit_rate: number | null;
+  quantity: number;
+  amount: number;
+  cost_date: string;
+  category: CostCategory;
+  description: string | null;
+  created_at: string;
+}
+
+export interface PlannerAssignedCostEntry {
+  id: string;
+  catalogue_item_id: string | null;
+  category: CostCategory;
+  name: string;
+  unit: string;
+  unit_rate: number;
+  override_unit_rate: number | null;
+  quantity: number;
+  amount: number;
+  cost_date: string;
+  description: string | null;
+  created_at: string;
+}
+
+export interface CreateCostRecordPayload {
+  activity_id: string;
+  catalogue_item_id?: string | null;
+  name?: string;
+  unit?: string;
+  unit_rate: number;
+  override_unit_rate?: number | null;
+  quantity: number;
+  cost_date: string;
+  category?: CostCategory;
+  description?: string | null;
+}
+
+export interface UpdateCostRecordPayload {
+  id: string;
+  name?: string;
+  unit?: string;
+  unit_rate?: number;
+  override_unit_rate?: number | null;
+  quantity?: number;
+  cost_date?: string;
+  category?: CostCategory;
+  description?: string | null;
+}
+
+/** Client-side computed cost summary for an activity */
+export interface ActivityCostSummary {
+  budget: number;
+  actual: number;
+  variance: number;
+  by_category: Record<CostCategory, number>;
+  eac: number | null;
+  etc: number | null;
   progress_percent: number;
 }
 

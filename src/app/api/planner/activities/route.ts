@@ -1,10 +1,70 @@
 import { NextRequest, NextResponse } from "next/server";
 import { mapRowToPlannerActivity } from "@/lib/planner-activity-mapper";
+import { computeCostLineAmount } from "@/lib/planner-cost-utils";
 import { getSupabaseAdmin } from "@/lib/supabase-admin";
 
 export const dynamic = "force-dynamic";
 
 type DepType = "FS" | "SS";
+
+type CostEntryInput = {
+  id: string;
+  catalogue_item_id: string | null;
+  category: string;
+  name: string;
+  unit: string;
+  unit_rate: number;
+  override_unit_rate: number | null;
+  quantity: number;
+  amount: number;
+  cost_date: string;
+  description: string | null;
+  created_at: string;
+};
+
+function sanitizeCostEntries(raw: unknown): CostEntryInput[] {
+  if (!Array.isArray(raw)) return [];
+  const validCategories = new Set(["machinery", "labour", "materials"]);
+  const out: CostEntryInput[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const id = String(r.id ?? "").trim();
+    const name = String(r.name ?? "").trim();
+    const unit = String(r.unit ?? "").trim();
+    const costDate = String(r.cost_date ?? "").trim();
+    const unitRate = Number(r.unit_rate);
+    const quantity = Number(r.quantity);
+    const overrideRaw = r.override_unit_rate;
+    const override =
+      overrideRaw != null && String(overrideRaw).trim() !== "" && Number.isFinite(Number(overrideRaw))
+        ? Number(overrideRaw)
+        : null;
+    if (!id || !name || !unit || !/^\d{4}-\d{2}-\d{2}$/.test(costDate)) continue;
+    if (!Number.isFinite(unitRate) || !Number.isFinite(quantity)) continue;
+    const categoryRaw = String(r.category ?? "materials").toLowerCase();
+    const category = validCategories.has(categoryRaw) ? categoryRaw : "materials";
+    out.push({
+      id,
+      catalogue_item_id:
+        r.catalogue_item_id != null && String(r.catalogue_item_id).trim() !== ""
+          ? String(r.catalogue_item_id)
+          : null,
+      category,
+      name,
+      unit,
+      unit_rate: unitRate,
+      override_unit_rate: override,
+      quantity,
+      amount: computeCostLineAmount(quantity, unitRate, override),
+      cost_date: costDate,
+      description:
+        r.description != null && String(r.description).trim() !== "" ? String(r.description) : null,
+      created_at: String(r.created_at ?? new Date().toISOString()),
+    });
+  }
+  return out;
+}
 
 function addDaysYmd(ymd: string, days: number): string {
   const [y, m, d] = ymd.split("-").map(Number);
@@ -208,6 +268,10 @@ export async function POST(req: NextRequest) {
   const progress_percent =
     Number.isFinite(rawProgress) ? Math.min(100, Math.max(0, Math.round(rawProgress))) : 0;
 
+  const rawBudget = Number(body.budget_amount);
+  const budget_amount = Number.isFinite(rawBudget) ? rawBudget : null;
+  const cost_entries = sanitizeCostEntries(body.cost_entries);
+
   const row = {
     crew_id,
     name,
@@ -222,6 +286,8 @@ export async function POST(req: NextRequest) {
     parent_activity_id: body.parent_activity_id || null,
     sort_order: body.sort_order ?? 0,
     progress_percent,
+    budget_amount,
+    cost_entries,
   };
 
   const { data, error } = await supabase
@@ -278,7 +344,7 @@ export async function PUT(req: NextRequest) {
   const allowed = [
     "name", "start_date", "end_date", "status", "notes",
     "wbs_code", "sort_order", "progress_percent",
-    "drainer_section_id", "drainer_segment_id",
+    "drainer_section_id", "drainer_segment_id", "budget_amount", "cost_entries",
   ];
   const filtered: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -287,6 +353,11 @@ export async function PUT(req: NextRequest) {
         const v = updates.drainer_section_id;
         filtered[key] =
           v == null || (typeof v === "string" && v.trim() === "") ? null : String(v).trim();
+      } else if (key === "budget_amount") {
+        const v = Number(updates.budget_amount);
+        filtered[key] = Number.isFinite(v) ? v : null;
+      } else if (key === "cost_entries") {
+        filtered[key] = sanitizeCostEntries(updates.cost_entries);
       } else {
         filtered[key] = updates[key];
       }

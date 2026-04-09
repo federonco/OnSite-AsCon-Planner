@@ -1,5 +1,6 @@
 import type { ActivityStatus, DependencyType, PlannerActivity } from "./planner-types";
 import { ACTIVITY_STATUSES, DEPENDENCY_TYPES } from "./planner-types";
+import { computeCostLineAmount } from "./planner-cost-utils";
 import { calendarSpanInclusiveDays, isValidDateOnlyString, toDateOnly } from "./planner-date";
 
 function asStatus(v: unknown): ActivityStatus {
@@ -13,6 +14,48 @@ function clampProgress(v: unknown): number {
   const n = typeof v === "number" ? v : Number(v);
   if (!Number.isFinite(n)) return 0;
   return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function sanitizeCostEntries(v: unknown): PlannerActivity["cost_entries"] {
+  if (!Array.isArray(v)) return [];
+  const allowed = new Set(["machinery", "labour", "materials"]);
+  return v
+    .map((x) => {
+      if (!x || typeof x !== "object") return null;
+      const r = x as Record<string, unknown>;
+      const id = String(r.id ?? "").trim();
+      const name = String(r.name ?? "").trim();
+      const unit = String(r.unit ?? "").trim();
+      const costDate = String(r.cost_date ?? "").trim();
+      const unitRate = Number(r.unit_rate);
+      const quantity = Number(r.quantity);
+      const overrideRaw = r.override_unit_rate;
+      const override =
+        overrideRaw != null && String(overrideRaw).trim() !== "" && Number.isFinite(Number(overrideRaw))
+          ? Number(overrideRaw)
+          : null;
+      if (!id || !name || !unit || !/^\d{4}-\d{2}-\d{2}$/.test(costDate)) return null;
+      if (!Number.isFinite(unitRate) || !Number.isFinite(quantity)) return null;
+      const category = String(r.category ?? "materials").toLowerCase();
+      return {
+        id,
+        catalogue_item_id:
+          r.catalogue_item_id != null && String(r.catalogue_item_id).trim() !== ""
+            ? String(r.catalogue_item_id)
+            : null,
+        category: (allowed.has(category) ? category : "materials") as "machinery" | "labour" | "materials",
+        name,
+        unit,
+        unit_rate: unitRate,
+        override_unit_rate: override,
+        quantity,
+        amount: computeCostLineAmount(quantity, unitRate, override),
+        cost_date: costDate,
+        description: r.description != null ? String(r.description) : null,
+        created_at: String(r.created_at ?? ""),
+      };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
 function asDependencyType(v: unknown): DependencyType | null {
@@ -80,6 +123,11 @@ export function mapRowToPlannerActivity(row: Record<string, unknown>): PlannerAc
       row.import_meta != null && typeof row.import_meta === "object"
         ? (row.import_meta as Record<string, unknown>)
         : null,
+    budget_amount:
+      row.budget_amount != null && Number.isFinite(Number(row.budget_amount))
+        ? Number(row.budget_amount)
+        : null,
+    cost_entries: sanitizeCostEntries(row.cost_entries),
   };
 }
 
