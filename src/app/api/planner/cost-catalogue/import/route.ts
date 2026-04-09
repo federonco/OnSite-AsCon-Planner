@@ -41,18 +41,15 @@ export async function POST(req: NextRequest) {
     const imported = parsed.items;
     const importBatchId = crypto.randomUUID();
 
-    // Deterministic matching: normalized category + name + unit + (cost_code when present)
-    let hasCostCodeColumn = true;
+    // Deterministic matching: normalized category + name + unit (ignore cost_code by business rule)
     let hasCompanyColumn = true;
     let existing: unknown[] = [];
     {
       const res = await supabase
         .from("planner_cost_catalogue")
-        .select("id, category, name, unit, cost_code, company");
+        .select("id, category, name, unit, company");
       if (res.error) {
-        // Backward compatible: allow running before `cost_code` migration applied.
-        if (res.error.message.toLowerCase().includes("cost_code") || res.error.message.toLowerCase().includes("company")) {
-          hasCostCodeColumn = !res.error.message.toLowerCase().includes("cost_code");
+        if (res.error.message.toLowerCase().includes("company")) {
           hasCompanyColumn = !res.error.message.toLowerCase().includes("company");
           const fallback = await supabase
             .from("planner_cost_catalogue")
@@ -77,9 +74,7 @@ export async function POST(req: NextRequest) {
         category,
         name: getString(row, "name"),
         unit: getString(row, "unit"),
-        cost_code: hasCostCodeColumn
-          ? asStringOrNull((row as Record<string, unknown>)?.cost_code)
-          : null,
+        cost_code: null,
       });
       const id = getString(row, "id");
       if (id) map.set(key, { id });
@@ -116,7 +111,7 @@ export async function POST(req: NextRequest) {
         description: it.description,
         unit: it.unit,
         unit_rate: it.unit_rate,
-        cost_code: hasCostCodeColumn ? it.cost_code : null,
+        cost_code: null,
         source_group: it.source_group,
         source_meta: sourceMeta,
         is_active: true,

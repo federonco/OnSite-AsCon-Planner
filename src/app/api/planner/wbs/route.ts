@@ -40,6 +40,7 @@ export async function POST(req: NextRequest) {
           label:
             r.label != null && String(r.label).trim() !== "" ? String(r.label).trim() : null,
           sort_order: Number.isFinite(Number(r.sort_order)) ? Number(r.sort_order) : idx,
+          budget_amount: null,
           is_active: true,
         }))
         .filter((r) => r.code);
@@ -47,8 +48,17 @@ export async function POST(req: NextRequest) {
       if (rows.length === 0) return NextResponse.json({ ok: true, seeded: 0 });
 
       // Use deterministic matching in code because `code` is unique in DB.
-      const { error } = await supabase.from("planner_wbs").upsert(rows, { onConflict: "code" });
-      if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+      const seeded = await supabase.from("planner_wbs").upsert(rows, { onConflict: "code" });
+      if (seeded.error && seeded.error.message.toLowerCase().includes("budget_amount")) {
+        const fallback = rows.map(({ budget_amount, ...rest }) => {
+          void budget_amount;
+          return rest;
+        });
+        const retry = await supabase.from("planner_wbs").upsert(fallback, { onConflict: "code" });
+        if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 });
+        return NextResponse.json({ ok: true, seeded: rows.length });
+      }
+      if (seeded.error) return NextResponse.json({ error: seeded.error.message }, { status: 500 });
       return NextResponse.json({ ok: true, seeded: rows.length });
     }
 
@@ -59,17 +69,31 @@ export async function POST(req: NextRequest) {
       code,
       label: body.label != null && String(body.label).trim() !== "" ? String(body.label).trim() : null,
       sort_order: Number.isFinite(Number(body.sort_order)) ? Number(body.sort_order) : 0,
+      budget_amount:
+        body.budget_amount != null && Number.isFinite(Number(body.budget_amount))
+          ? Number(body.budget_amount)
+          : null,
       is_active: body.is_active !== false,
     };
 
-    const { data, error } = await supabase
+    const created = await supabase
       .from("planner_wbs")
       .upsert(row, { onConflict: "code" })
       .select("*")
       .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data);
+    if (created.error && created.error.message.toLowerCase().includes("budget_amount")) {
+      const { budget_amount, ...fallback } = row;
+      void budget_amount;
+      const retry = await supabase
+        .from("planner_wbs")
+        .upsert(fallback, { onConflict: "code" })
+        .select("*")
+        .single();
+      if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 });
+      return NextResponse.json(retry.data);
+    }
+    if (created.error) return NextResponse.json({ error: created.error.message }, { status: 500 });
+    return NextResponse.json(created.data);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";
     return NextResponse.json({ error: msg }, { status: 500 });
@@ -97,6 +121,12 @@ export async function PUT(req: NextRequest) {
     if ("sort_order" in body) {
       updates.sort_order = Number.isFinite(Number(body.sort_order)) ? Number(body.sort_order) : 0;
     }
+    if ("budget_amount" in body) {
+      updates.budget_amount =
+        body.budget_amount != null && Number.isFinite(Number(body.budget_amount))
+          ? Number(body.budget_amount)
+          : null;
+    }
     if ("is_active" in body) {
       updates.is_active = Boolean(body.is_active);
     }
@@ -105,15 +135,26 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: "No valid fields to update" }, { status: 400 });
     }
 
-    const { data, error } = await supabase
+    const updated = await supabase
       .from("planner_wbs")
       .update(updates)
       .eq("id", id)
       .select("*")
       .single();
-
-    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-    return NextResponse.json(data);
+    if (updated.error && updated.error.message.toLowerCase().includes("budget_amount")) {
+      const { budget_amount, ...fallback } = updates;
+      void budget_amount;
+      const retry = await supabase
+        .from("planner_wbs")
+        .update(fallback)
+        .eq("id", id)
+        .select("*")
+        .single();
+      if (retry.error) return NextResponse.json({ error: retry.error.message }, { status: 500 });
+      return NextResponse.json(retry.data);
+    }
+    if (updated.error) return NextResponse.json({ error: updated.error.message }, { status: 500 });
+    return NextResponse.json(updated.data);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Server error";
     return NextResponse.json({ error: msg }, { status: 500 });

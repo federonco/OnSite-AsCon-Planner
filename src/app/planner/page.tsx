@@ -29,7 +29,6 @@ import { SettingsDropdown } from "@/components/ui/SettingsDropdown";
 import { Sidebar } from "@/components/ui/Sidebar";
 import { TopHeader } from "@/components/ui/TopHeader";
 import PeopleLeaveQrDialog from "@/components/planner/PeopleLeaveQrDialog";
-import PlannerCostLibraryModal from "@/components/planner/PlannerCostLibraryModal";
 
 const PlannerCalendar = dynamic(
   () => import("@/components/planner/PlannerCalendar"),
@@ -78,7 +77,6 @@ export default function PlannerPage() {
   const [crewsFetchError, setCrewsFetchError] = useState<string | null>(null);
   const [activitiesFetchError, setActivitiesFetchError] = useState<string | null>(null);
   const [showLeaveQr, setShowLeaveQr] = useState(false);
-  const [showCostLibrary, setShowCostLibrary] = useState(false);
 
   const pipelineStatsRef = useRef({
     rawCount: 0,
@@ -427,20 +425,15 @@ export default function PlannerPage() {
             }
             right={
               <>
-                <button
-                  type="button"
-                  onClick={() => setShowCostLibrary(true)}
-                  className="rounded-dashboard-md px-4 py-2.5 text-dashboard-sm font-medium text-dashboard-text-secondary transition-[background-color,color] duration-dashboard-fast hover:bg-dashboard-bg hover:text-dashboard-text-primary"
-                >
-                  Resource library
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowImporter(true)}
-                  className="rounded-dashboard-md px-4 py-2.5 text-dashboard-sm font-medium text-dashboard-text-secondary transition-[background-color,color] duration-dashboard-fast hover:bg-dashboard-bg hover:text-dashboard-text-primary"
-                >
-                  Import XML / XER
-                </button>
+                {false && (
+                  <button
+                    type="button"
+                    onClick={() => setShowImporter(true)}
+                    className="rounded-dashboard-md px-4 py-2.5 text-dashboard-sm font-medium text-dashboard-text-secondary transition-[background-color,color] duration-dashboard-fast hover:bg-dashboard-bg hover:text-dashboard-text-primary"
+                  >
+                    Import XML / XER
+                  </button>
+                )}
                 <CreateEventButton onClick={handleNewActivity}>+ Activity</CreateEventButton>
                 <SettingsDropdown
                   scheduleManifestQuery={
@@ -511,11 +504,11 @@ export default function PlannerPage() {
           key={selectedActivity?.id ?? `new-${defaultDate ?? ""}`}
           activity={selectedActivity}
           activities={activities}
-          crews={crewsForForms.length > 0 ? crewsForForms : crews}
+          crews={crews}
           defaultCrewId={typeof onlyEnabledCrewId === "string" ? onlyEnabledCrewId : crewFilter}
           defaultDate={defaultDate}
           defaultSectionId={null}
-          suppressEscapeClose={showCostLibrary}
+          suppressEscapeClose={false}
           onSave={handleSave}
           onDelete={handleDelete}
           onClose={() => {
@@ -524,8 +517,6 @@ export default function PlannerPage() {
           }}
         />
       )}
-
-      <PlannerCostLibraryModal open={showCostLibrary} onClose={() => setShowCostLibrary(false)} />
 
       {showImporter && (
         <ProjectImporter

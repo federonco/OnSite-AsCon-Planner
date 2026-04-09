@@ -1,4 +1,5 @@
 import { cn } from "@/lib/cn";
+import Image from "next/image";
 
 export type SiteFooterVariant = "dashboard" | "dark" | "light";
 
@@ -37,7 +38,7 @@ export function SiteFooter({
             rel="noreferrer"
             className="inline-flex items-center gap-1 align-middle -translate-y-[2px] underline-offset-2 hover:underline"
           >
-            <span className="font-semibold tracking-tight">readX</span>
+            <Image src="/readx.logo.png" alt="readX" width={58} height={16} className="h-4 w-auto" />
           </a>
         </div>
         <div>All Rights Reserved.</div>

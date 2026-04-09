@@ -7,6 +7,7 @@ import {
   CreateActivityPayload,
   UpdateActivityPayload,
   PlannerAssignedCostEntry,
+  PlannerBudgetAllocation,
   ACTIVITY_STATUSES,
   ActivityStatus,
   type DrainerSectionListItem,
@@ -18,6 +19,7 @@ import { ACTIVITY_STATUS_COLORS, ACTIVITY_STATUS_LABELS } from "@/lib/planner-co
 import { countWaWorkingDaysInclusive } from "@/lib/wa-public-holidays";
 import { calendarSpanInclusiveDays } from "@/lib/planner-date";
 import { differenceInCalendarDays } from "date-fns";
+import { mapPlannerRowsFromApi } from "@/lib/planner-activity-mapper";
 
 const kebabIcon = (
   <svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor" aria-hidden>
@@ -70,6 +72,15 @@ export default function ActivityForm({
     Math.min(100, Math.max(0, Math.round(activity?.progress_percent ?? 0)))
   );
   const [notes, setNotes] = useState(activity?.notes || "");
+  const [crewOptions, setCrewOptions] = useState<Crew[]>(crews);
+  const [crewKebabOpen, setCrewKebabOpen] = useState(false);
+  const [createCrewOpen, setCreateCrewOpen] = useState(false);
+  const [editCrewOpen, setEditCrewOpen] = useState(false);
+  const [newCrewName, setNewCrewName] = useState("");
+  const [editCrewName, setEditCrewName] = useState("");
+  const [crewSaving, setCrewSaving] = useState(false);
+  const [crewError, setCrewError] = useState<string | null>(null);
+  const crewKebabRef = useRef<HTMLDivElement>(null);
   const [wbsCode, setWbsCode] = useState(activity?.wbs_code || "");
   const [wbsOptions, setWbsOptions] = useState<Array<{ code: string; label: string | null }>>([]);
   const [wbsLoading, setWbsLoading] = useState(false);
@@ -108,6 +119,9 @@ export default function ActivityForm({
   const [budgetAmount, setBudgetAmount] = useState(
     () => activity?.budget_amount != null ? String(activity.budget_amount) : ""
   );
+  const [budgetAllocations, setBudgetAllocations] = useState<PlannerBudgetAllocation[]>(
+    () => activity?.budget_allocations ?? []
+  );
   const [draftCostEntries, setDraftCostEntries] = useState<PlannerAssignedCostEntry[]>(() =>
     (activity?.cost_entries ?? []).map((e) => ({
       ...e,
@@ -118,6 +132,11 @@ export default function ActivityForm({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [allActivitiesForLinks, setAllActivitiesForLinks] = useState<PlannerActivity[]>([]);
+
+  useEffect(() => {
+    setCrewOptions(crews);
+  }, [crews]);
 
   useEffect(() => {
     if (!crewId) {
@@ -159,9 +178,30 @@ export default function ActivityForm({
       if (wbsKebabRef.current && !wbsKebabRef.current.contains(e.target as Node)) {
         setWbsKebabOpen(false);
       }
+      if (crewKebabRef.current && !crewKebabRef.current.contains(e.target as Node)) {
+        setCrewKebabOpen(false);
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/planner/activities");
+        const body: unknown = await res.json().catch(() => []);
+        if (!res.ok || !Array.isArray(body)) return;
+        const mapped = mapPlannerRowsFromApi(body).activities;
+        if (!cancelled) setAllActivitiesForLinks(mapped);
+      } catch {
+        if (!cancelled) setAllActivitiesForLinks([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   useEffect(() => {
@@ -252,6 +292,66 @@ export default function ActivityForm({
     }
   };
 
+  const handleCreateCrew = async () => {
+    const name = newCrewName.trim();
+    if (!name) return;
+    setCrewSaving(true);
+    setCrewError(null);
+    try {
+      const res = await fetch("/api/planner/crews", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { id?: string; name?: string; error?: string };
+      if (!res.ok) throw new Error(body.error || res.statusText);
+      const created: Crew = { id: String(body.id ?? ""), name: String(body.name ?? name) };
+      if (!created.id || !created.name.trim()) throw new Error("Invalid crew response");
+      setCrewOptions((prev) => {
+        const next = [...prev.filter((c) => c.id !== created.id), created];
+        next.sort((a, b) => a.name.localeCompare(b.name));
+        return next;
+      });
+      setCrewId(created.id);
+      setCreateCrewOpen(false);
+      setCrewKebabOpen(false);
+      setNewCrewName("");
+    } catch (e) {
+      setCrewError(e instanceof Error ? e.message : "Could not create crew");
+    } finally {
+      setCrewSaving(false);
+    }
+  };
+
+  const handleRenameCrew = async () => {
+    const name = editCrewName.trim();
+    if (!crewId || !name) return;
+    setCrewSaving(true);
+    setCrewError(null);
+    try {
+      const res = await fetch("/api/planner/crews", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id: crewId, name }),
+      });
+      const body = (await res.json().catch(() => ({}))) as { id?: string; name?: string; error?: string };
+      if (!res.ok) throw new Error(body.error || res.statusText);
+      const updatedId = String(body.id ?? crewId);
+      const updatedName = String(body.name ?? name);
+      setCrewOptions((prev) =>
+        prev
+          .map((c) => (c.id === updatedId ? { ...c, name: updatedName } : c))
+          .sort((a, b) => a.name.localeCompare(b.name))
+      );
+      setEditCrewOpen(false);
+      setCrewKebabOpen(false);
+    } catch (e) {
+      setCrewError(e instanceof Error ? e.message : "Could not update crew");
+    } finally {
+      setCrewSaving(false);
+    }
+  };
+
   const prevCrewRef = useRef<string | null>(null);
   useEffect(() => {
     if (isEditing) return;
@@ -265,6 +365,21 @@ export default function ActivityForm({
     }
   }, [crewId, isEditing]);
 
+  useEffect(() => {
+    if (!drainerSectionId) return;
+    const selected = sectionOptions.find((s) => s.id === drainerSectionId);
+    const estimatedEnd =
+      selected?.estimated_end_date && /^\d{4}-\d{2}-\d{2}$/.test(selected.estimated_end_date)
+        ? selected.estimated_end_date
+        : null;
+    if (!estimatedEnd) return;
+
+    setEndDate(estimatedEnd);
+    if (startDate && startDate > estimatedEnd) {
+      setStartDate(estimatedEnd);
+    }
+  }, [drainerSectionId, sectionOptions, startDate]);
+
   const daySpanSummary = useMemo(() => {
     if (!startDate || !endDate) return null;
     const start = new Date(startDate + "T12:00:00");
@@ -275,6 +390,11 @@ export default function ActivityForm({
     return { calendarDays, waWorking };
   }, [startDate, endDate]);
 
+  const budgetAllocationsTotal = useMemo(
+    () => budgetAllocations.reduce((sum, row) => sum + (Number.isFinite(row.amount) ? row.amount : 0), 0),
+    [budgetAllocations]
+  );
+
   const durationDaysForCosts = useMemo(() => {
     if (!startDate || !endDate) return 1;
     return calendarSpanInclusiveDays(startDate, endDate);
@@ -282,11 +402,16 @@ export default function ActivityForm({
 
   const predecessorOptions = useMemo(
     () =>
-      activities
+      (allActivitiesForLinks.length > 0 ? allActivitiesForLinks : activities)
         .filter((a) => a.id !== activity?.id)
         .sort((a, b) => a.start_date.localeCompare(b.start_date) || a.name.localeCompare(b.name)),
-    [activities, activity?.id]
+    [allActivitiesForLinks, activities, activity?.id]
   );
+
+  useEffect(() => {
+    if (budgetAllocations.length === 0) return;
+    setBudgetAmount(String(Number(budgetAllocationsTotal.toFixed(2))));
+  }, [budgetAllocations, budgetAllocationsTotal]);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -380,7 +505,13 @@ export default function ActivityForm({
           predecessor_id: linkMode === "none" ? null : predecessorId || null,
           dependency_type: depType,
           dependency_lag_days: depType ? depLag : null,
-          budget_amount: budgetAmount.trim() !== "" && Number.isFinite(parsedBudget) ? parsedBudget : null,
+          budget_amount:
+            budgetAllocations.length > 0
+              ? Number(budgetAllocationsTotal.toFixed(2))
+              : budgetAmount.trim() !== "" && Number.isFinite(parsedBudget)
+                ? parsedBudget
+                : null,
+          budget_allocations: budgetAllocations,
           cost_entries: draftCostEntries,
         };
         await onSave(payload);
@@ -402,7 +533,13 @@ export default function ActivityForm({
           predecessor_id: linkMode === "none" ? null : predecessorId || null,
           dependency_type: depType,
           dependency_lag_days: depType ? depLag : null,
-          budget_amount: budgetAmount.trim() !== "" && Number.isFinite(parsedBudgetCreate) ? parsedBudgetCreate : null,
+          budget_amount:
+            budgetAllocations.length > 0
+              ? Number(budgetAllocationsTotal.toFixed(2))
+              : budgetAmount.trim() !== "" && Number.isFinite(parsedBudgetCreate)
+                ? parsedBudgetCreate
+                : null,
+          budget_allocations: budgetAllocations,
           cost_entries: draftCostEntries,
         };
         await onSave(payload);
@@ -468,18 +605,123 @@ export default function ActivityForm({
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">Crew *</label>
-              <select
-                value={crewId}
-                onChange={(e) => setCrewId(e.target.value)}
-                className={inputClass}
-                disabled={isEditing}
-              >
-                {crews.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.name}
-                  </option>
-                ))}
-              </select>
+              <div className="flex gap-2">
+                <select
+                  value={crewId}
+                  onChange={(e) => setCrewId(e.target.value)}
+                  className={inputClass}
+                  disabled={isEditing}
+                >
+                  {crewOptions.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative shrink-0 self-center" ref={crewKebabRef}>
+                  <IconButton
+                    label="Crew options"
+                    type="button"
+                    onClick={() => {
+                      setCrewKebabOpen((o) => !o);
+                      setCreateCrewOpen(false);
+                      setEditCrewOpen(false);
+                      setCrewError(null);
+                    }}
+                  >
+                    {kebabIcon}
+                  </IconButton>
+                  {crewKebabOpen && (
+                    <div
+                      className="absolute right-0 top-full z-[60] mt-1 min-w-[200px] rounded-dashboard-md border border-dashboard-border bg-dashboard-surface py-1 shadow-dashboard-card"
+                      role="menu"
+                    >
+                      <button
+                        type="button"
+                        role="menuitem"
+                        className="w-full px-3 py-2 text-left text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-bg"
+                        onClick={() => {
+                          setCrewKebabOpen(false);
+                          setCreateCrewOpen(true);
+                          setEditCrewOpen(false);
+                          setNewCrewName("");
+                          setCrewError(null);
+                        }}
+                      >
+                        Create crew
+                      </button>
+                      <button
+                        type="button"
+                        role="menuitem"
+                        disabled={!crewId}
+                        className="w-full px-3 py-2 text-left text-dashboard-sm text-dashboard-text-secondary transition-colors hover:bg-dashboard-bg disabled:opacity-50"
+                        onClick={() => {
+                          const selected = crewOptions.find((c) => c.id === crewId);
+                          setCrewKebabOpen(false);
+                          setEditCrewOpen(true);
+                          setCreateCrewOpen(false);
+                          setEditCrewName(selected?.name ?? "");
+                          setCrewError(null);
+                        }}
+                      >
+                        Rename selected crew
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+              {(createCrewOpen || editCrewOpen) && (
+                <div className="mt-3 space-y-3 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
+                  <p className="text-dashboard-sm font-semibold text-dashboard-text-primary">
+                    {createCrewOpen ? "Create crew" : "Rename crew"}
+                  </p>
+                  {crewError && (
+                    <p className="text-dashboard-xs text-dashboard-status-danger" role="alert">
+                      {crewError}
+                    </p>
+                  )}
+                  <div>
+                    <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
+                      Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={createCrewOpen ? newCrewName : editCrewName}
+                      onChange={(e) =>
+                        createCrewOpen ? setNewCrewName(e.target.value) : setEditCrewName(e.target.value)
+                      }
+                      placeholder="Crew name"
+                      className={inputClass}
+                      disabled={crewSaving}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      type="button"
+                      disabled={crewSaving || !(createCrewOpen ? newCrewName.trim() : editCrewName.trim())}
+                      onClick={() => void (createCrewOpen ? handleCreateCrew() : handleRenameCrew())}
+                      className="rounded-dashboard-sm bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] px-3 py-1.5 text-dashboard-sm font-medium text-white shadow-dashboard-card disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {crewSaving ? "Saving…" : "Save"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={crewSaving}
+                      onClick={() => {
+                        setCreateCrewOpen(false);
+                        setEditCrewOpen(false);
+                        setNewCrewName("");
+                        setEditCrewName("");
+                        setCrewError(null);
+                      }}
+                      className="rounded-dashboard-sm bg-dashboard-surface px-3 py-1.5 text-dashboard-sm font-medium text-dashboard-text-secondary hover:bg-dashboard-border/30"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
             <div>
               <label className="mb-1 block text-dashboard-sm text-dashboard-text-secondary">WBS</label>
@@ -870,6 +1112,78 @@ export default function ActivityForm({
               rows={3}
               className={`${inputClass} resize-none`}
             />
+          </div>
+
+          <div className="space-y-2 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-dashboard-xs font-medium text-dashboard-text-secondary">Budget by cost code</p>
+              <button
+                type="button"
+                onClick={() =>
+                  setBudgetAllocations((prev) => [...prev, { cost_code: wbsCode.trim() || "", amount: 0, note: null }])
+                }
+                className="rounded-dashboard-sm border border-dashboard-border px-2 py-1 text-dashboard-xs text-dashboard-text-secondary hover:bg-dashboard-surface"
+              >
+                + Add cost code
+              </button>
+            </div>
+            {budgetAllocations.length === 0 ? (
+              <p className="text-dashboard-xs text-dashboard-text-muted">
+                No budget allocations yet. Add one or more cost codes for this activity.
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {budgetAllocations.map((row, idx) => (
+                  <div key={`${row.cost_code}-${idx}`} className="grid grid-cols-1 gap-2 sm:grid-cols-12">
+                    <div className="sm:col-span-5">
+                      <select
+                        value={row.cost_code}
+                        onChange={(e) =>
+                          setBudgetAllocations((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, cost_code: e.target.value } : r))
+                          )
+                        }
+                        className={inputClass}
+                      >
+                        <option value="">Select cost code (WBS)</option>
+                        {wbsOptions.map((w) => (
+                          <option key={w.code} value={w.code}>
+                            {w.label ? `${w.code} — ${w.label}` : w.code}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="sm:col-span-4">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={String(row.amount)}
+                        onChange={(e) =>
+                          setBudgetAllocations((prev) =>
+                            prev.map((r, i) => (i === idx ? { ...r, amount: Number(e.target.value) || 0 } : r))
+                          )
+                        }
+                        placeholder="Budget amount"
+                        className={inputClass}
+                      />
+                    </div>
+                    <div className="sm:col-span-3">
+                      <button
+                        type="button"
+                        onClick={() => setBudgetAllocations((prev) => prev.filter((_, i) => i !== idx))}
+                        className="w-full rounded-dashboard-md bg-dashboard-status-danger/10 px-3 py-2 text-dashboard-sm font-medium text-dashboard-status-danger hover:bg-dashboard-status-danger/15"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+                <p className="text-right text-dashboard-xs font-medium text-dashboard-text-secondary">
+                  Allocation total: ${budgetAllocationsTotal.toFixed(2)}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">

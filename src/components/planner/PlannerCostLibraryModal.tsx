@@ -17,7 +17,6 @@ export interface PlannerCostLibraryModalProps {
 }
 
 export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLibraryModalProps) {
-  const [showWbsLibrary, setShowWbsLibrary] = useState(false);
   const [items, setItems] = useState<PlannerCostCatalogueItem[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +32,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
   const [formName, setFormName] = useState("");
   const [formCompany, setFormCompany] = useState("");
   const [formDescription, setFormDescription] = useState("");
-  const [formCostCode, setFormCostCode] = useState("");
   const [formUnit, setFormUnit] = useState("");
   const [formRate, setFormRate] = useState("");
   const [formSortOrder, setFormSortOrder] = useState("0");
@@ -44,24 +42,12 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const [lastImportBatchId, setLastImportBatchId] = useState<string | null>(null);
   const [revertingImport, setRevertingImport] = useState(false);
-  const [wbsItems, setWbsItems] = useState<
-    Array<{ id: string; code: string; label: string | null; sort_order: number; is_active: boolean }>
-  >([]);
-  const [wbsLoading, setWbsLoading] = useState(false);
-  const [wbsError, setWbsError] = useState<string | null>(null);
-  const [wbsSaving, setWbsSaving] = useState(false);
-  const [wbsEditingId, setWbsEditingId] = useState<string | null>(null);
-  const [wbsCode, setWbsCode] = useState("");
-  const [wbsLabel, setWbsLabel] = useState("");
-  const [wbsSort, setWbsSort] = useState("0");
-  const [wbsActive, setWbsActive] = useState(true);
 
   function resetForm() {
     setFormCategory("machinery");
     setFormName("");
     setFormCompany("");
     setFormDescription("");
-    setFormCostCode("");
     setFormUnit("");
     setFormRate("");
     setFormSortOrder("0");
@@ -84,42 +70,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
       setLoading(false);
     }
   }, [open]);
-
-  const loadWbs = useCallback(async () => {
-    if (!open) return;
-    setWbsLoading(true);
-    setWbsError(null);
-    try {
-      const res = await fetch("/api/planner/wbs?include_inactive=true");
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body as { error?: string }).error || res.statusText);
-      const rows = Array.isArray(body) ? body : [];
-      const mapped = rows
-        .map((r) => ({
-          id: String((r as Record<string, unknown>).id ?? "").trim(),
-          code: String((r as Record<string, unknown>).code ?? "").trim(),
-          label:
-            (r as Record<string, unknown>).label != null &&
-            String((r as Record<string, unknown>).label).trim() !== ""
-              ? String((r as Record<string, unknown>).label).trim()
-              : null,
-          sort_order: Number((r as Record<string, unknown>).sort_order ?? 0),
-          is_active: Boolean((r as Record<string, unknown>).is_active ?? true),
-        }))
-        .filter((r) => r.id && r.code);
-      setWbsItems(mapped);
-    } catch (e) {
-      setWbsError(e instanceof Error ? e.message : "Could not load WBS");
-      setWbsItems([]);
-    } finally {
-      setWbsLoading(false);
-    }
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    void loadWbs();
-  }, [open, loadWbs]);
 
   useEffect(() => {
     void load();
@@ -163,7 +113,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
     setFormName(row.name);
     setFormCompany(row.company ?? "");
     setFormDescription(row.description ?? "");
-    setFormCostCode((row.cost_code ?? "") || "");
     setFormUnit(row.unit);
     setFormRate(String(row.unit_rate));
     setFormSortOrder(String(row.sort_order ?? 0));
@@ -175,24 +124,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
     setEditingId(null);
     resetForm();
     setSaveError(null);
-  };
-
-  const beginWbsCreate = () => {
-    setWbsEditingId(null);
-    setWbsCode("");
-    setWbsLabel("");
-    setWbsSort("0");
-    setWbsActive(true);
-    setWbsError(null);
-  };
-
-  const beginWbsEdit = (row: { id: string; code: string; label: string | null; sort_order: number; is_active: boolean }) => {
-    setWbsEditingId(row.id);
-    setWbsCode(row.code);
-    setWbsLabel(row.label ?? "");
-    setWbsSort(String(row.sort_order ?? 0));
-    setWbsActive(row.is_active);
-    setWbsError(null);
   };
 
   const handleImport = async (file: File) => {
@@ -281,7 +212,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
             name,
             description: formDescription.trim() || null,
             company: formCompany.trim() || null,
-            cost_code: formCostCode.trim() || null,
             unit,
             unit_rate: rate,
             sort_order: Number(formSortOrder) || 0,
@@ -299,7 +229,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
             name,
             description: formDescription.trim() || null,
             company: formCompany.trim() || null,
-            cost_code: formCostCode.trim() || null,
             unit,
             unit_rate: rate,
             sort_order: Number(formSortOrder) || 0,
@@ -315,37 +244,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
       setSaveError(e instanceof Error ? e.message : "Save failed");
     } finally {
       setSaving(false);
-    }
-  };
-
-  const submitWbsForm = async () => {
-    const code = wbsCode.trim();
-    if (!code) {
-      setWbsError("WBS code is required.");
-      return;
-    }
-    setWbsSaving(true);
-    setWbsError(null);
-    try {
-      const payload = {
-        code,
-        label: wbsLabel.trim() || null,
-        sort_order: Number(wbsSort) || 0,
-        is_active: wbsActive,
-      };
-      const res = await fetch("/api/planner/wbs", {
-        method: wbsEditingId ? "PUT" : "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(wbsEditingId ? { id: wbsEditingId, ...payload } : payload),
-      });
-      const body = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error((body as { error?: string }).error || res.statusText);
-      await loadWbs();
-      beginWbsCreate();
-    } catch (e) {
-      setWbsError(e instanceof Error ? e.message : "Save WBS failed");
-    } finally {
-      setWbsSaving(false);
     }
   };
 
@@ -498,30 +396,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                 />
               </div>
               <div>
-                <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">WBS code</label>
-                <select
-                  value={formCostCode}
-                  onChange={(e) => setFormCostCode(e.target.value)}
-                  className={inputClass}
-                  disabled={saving || wbsLoading}
-                >
-                  <option value="">No WBS code</option>
-                  {formCostCode &&
-                    !wbsItems.some((w) => w.code === formCostCode) && (
-                      <option value={formCostCode}>{formCostCode} (legacy)</option>
-                    )}
-                  {wbsItems
-                    .filter((w) => w.is_active)
-                    .sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code))
-                    .map((w) => (
-                      <option key={w.id} value={w.code}>
-                        {w.code}
-                        {w.label ? ` — ${w.label}` : ""}
-                      </option>
-                    ))}
-                </select>
-              </div>
-              <div>
                 <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Unit *</label>
                 <input
                   value={formUnit}
@@ -613,121 +487,7 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                 className="block w-full max-w-[260px] text-dashboard-xs text-dashboard-text-secondary file:mr-2 file:rounded-dashboard-sm file:border-0 file:bg-dashboard-bg file:px-3 file:py-2 file:text-dashboard-xs file:font-medium file:text-dashboard-text-secondary hover:file:bg-dashboard-border/40"
               />
             </div>
-            <div className="w-full lg:w-auto">
-              <label className="mb-1 block text-dashboard-xs font-medium text-dashboard-text-secondary">
-                WBS
-              </label>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowWbsLibrary((v) => !v);
-                  if (!showWbsLibrary) beginWbsCreate();
-                }}
-                className="rounded-dashboard-md bg-dashboard-bg px-3 py-2 text-dashboard-xs font-medium text-dashboard-text-secondary transition-colors hover:bg-dashboard-border/40"
-              >
-                {showWbsLibrary ? "Hide WBS library" : "WBS library"}
-              </button>
-            </div>
           </div>
-
-          {showWbsLibrary && (
-            <div className="mb-6 rounded-dashboard-lg border border-dashboard-border bg-dashboard-bg p-4">
-              <div className="mb-3 flex items-center justify-between gap-2">
-                <h3 className="text-dashboard-sm font-semibold text-dashboard-text-primary">
-                  {wbsEditingId ? "Edit WBS" : "Create WBS"}
-                </h3>
-                {wbsEditingId && (
-                  <button
-                    type="button"
-                    onClick={beginWbsCreate}
-                    className="text-dashboard-xs font-medium text-[#5B5FEF] hover:underline"
-                  >
-                    Clear · new WBS
-                  </button>
-                )}
-              </div>
-              {wbsError && (
-                <p className="mb-2 text-dashboard-xs text-dashboard-status-danger">{wbsError}</p>
-              )}
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                <div>
-                  <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Code *</label>
-                  <input value={wbsCode} onChange={(e) => setWbsCode(e.target.value)} className={inputClass} disabled={wbsSaving} />
-                </div>
-                <div className="sm:col-span-2">
-                  <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Label</label>
-                  <input value={wbsLabel} onChange={(e) => setWbsLabel(e.target.value)} className={inputClass} disabled={wbsSaving} />
-                </div>
-                <div>
-                  <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Sort order</label>
-                  <input type="number" value={wbsSort} onChange={(e) => setWbsSort(e.target.value)} className={inputClass} disabled={wbsSaving} />
-                </div>
-                <div className="flex items-center gap-2 sm:col-span-2 lg:col-span-4">
-                  <label className="flex cursor-pointer items-center gap-2 text-dashboard-sm text-dashboard-text-secondary">
-                    <input type="checkbox" checked={wbsActive} onChange={(e) => setWbsActive(e.target.checked)} disabled={wbsSaving} />
-                    Active
-                  </label>
-                </div>
-              </div>
-              <div className="mt-3 flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => void submitWbsForm()}
-                  disabled={wbsSaving}
-                  className="rounded-dashboard-md bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] px-4 py-2 text-dashboard-sm font-medium text-white shadow-dashboard-card disabled:opacity-50"
-                >
-                  {wbsSaving ? "Saving…" : wbsEditingId ? "Save WBS" : "Create WBS"}
-                </button>
-              </div>
-
-              <div className="mt-4 overflow-x-auto rounded-dashboard-md border border-dashboard-border">
-                <table className="min-w-full text-left text-dashboard-xs">
-                  <thead className="border-b border-dashboard-border bg-dashboard-bg text-dashboard-text-secondary">
-                    <tr>
-                      <th className="px-3 py-2 font-medium">Status</th>
-                      <th className="px-3 py-2 font-medium">Code</th>
-                      <th className="px-3 py-2 font-medium">Label</th>
-                      <th className="px-3 py-2 font-medium text-right">Order</th>
-                      <th className="px-3 py-2 font-medium text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {wbsLoading ? (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-4 text-center text-dashboard-text-muted">
-                          Loading WBS…
-                        </td>
-                      </tr>
-                    ) : wbsItems.length === 0 ? (
-                      <tr>
-                        <td colSpan={5} className="px-3 py-4 text-center text-dashboard-text-muted">
-                          No WBS entries yet.
-                        </td>
-                      </tr>
-                    ) : (
-                      wbsItems.map((row) => (
-                        <tr key={row.id} className="border-t border-dashboard-border">
-                          <td className="px-3 py-2">{row.is_active ? "Active" : "Inactive"}</td>
-                          <td className="px-3 py-2 font-medium text-dashboard-text-primary">{row.code}</td>
-                          <td className="px-3 py-2 text-dashboard-text-secondary">{row.label ?? "—"}</td>
-                          <td className="px-3 py-2 text-right tabular-nums text-dashboard-text-muted">{row.sort_order}</td>
-                          <td className="px-3 py-2 text-right">
-                            <button
-                              type="button"
-                              onClick={() => beginWbsEdit(row)}
-                              className="rounded-dashboard-sm px-2 py-1 text-dashboard-xs font-medium text-[#5B5FEF] hover:bg-[#5B5FEF]/10"
-                            >
-                              Edit
-                            </button>
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
 
           <h3 className="mb-2 text-dashboard-sm font-semibold text-dashboard-text-primary">Catalogue</h3>
           {loading ? (
@@ -742,7 +502,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                     <th className="px-3 py-2 font-medium">Name</th>
                     <th className="px-3 py-2 font-medium">Company</th>
                     <th className="px-3 py-2 font-medium">Description</th>
-                    <th className="px-3 py-2 font-medium">WBS code</th>
                     <th className="px-3 py-2 font-medium">Unit</th>
                     <th className="px-3 py-2 font-medium text-right">Rate</th>
                     <th className="px-3 py-2 font-medium text-right">Order</th>
@@ -752,7 +511,7 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                 <tbody>
                   {filteredSorted.length === 0 ? (
                     <tr>
-                      <td colSpan={10} className="px-3 py-6 text-center text-dashboard-text-muted">
+                      <td colSpan={9} className="px-3 py-6 text-center text-dashboard-text-muted">
                         No items match your filters.
                       </td>
                     </tr>
@@ -789,7 +548,6 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                         <td className="max-w-[200px] truncate px-3 py-2 text-dashboard-text-secondary">
                           {row.description ?? "—"}
                         </td>
-                        <td className="px-3 py-2 text-dashboard-text-muted">{row.cost_code ?? "—"}</td>
                         <td className="px-3 py-2 text-dashboard-text-muted">{row.unit}</td>
                         <td className="px-3 py-2 text-right tabular-nums text-dashboard-text-primary">
                           ${formatCost(Number(row.unit_rate))}

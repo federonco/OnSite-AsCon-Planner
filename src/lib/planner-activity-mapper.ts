@@ -58,6 +58,22 @@ function sanitizeCostEntries(v: unknown): PlannerActivity["cost_entries"] {
     .filter((x): x is NonNullable<typeof x> => x !== null);
 }
 
+function sanitizeBudgetAllocations(v: unknown): PlannerActivity["budget_allocations"] {
+  if (!Array.isArray(v)) return [];
+  return v
+    .map((x) => {
+      if (!x || typeof x !== "object") return null;
+      const r = x as Record<string, unknown>;
+      const costCode = String(r.cost_code ?? "").trim();
+      const amount = Number(r.amount);
+      if (!costCode || !Number.isFinite(amount) || amount < 0) return null;
+      const note =
+        r.note != null && String(r.note).trim() !== "" ? String(r.note).trim() : null;
+      return { cost_code: costCode, amount, note };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null);
+}
+
 function asDependencyType(v: unknown): DependencyType | null {
   if (typeof v === "string" && (DEPENDENCY_TYPES as readonly string[]).includes(v)) {
     return v as DependencyType;
@@ -127,6 +143,7 @@ export function mapRowToPlannerActivity(row: Record<string, unknown>): PlannerAc
       row.budget_amount != null && Number.isFinite(Number(row.budget_amount))
         ? Number(row.budget_amount)
         : null,
+    budget_allocations: sanitizeBudgetAllocations(row.budget_allocations),
     cost_entries: sanitizeCostEntries(row.cost_entries),
   };
 }

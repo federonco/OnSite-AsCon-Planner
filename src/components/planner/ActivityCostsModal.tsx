@@ -74,11 +74,11 @@ export default function ActivityCostsModal({
 
   const [search, setSearch] = useState("");
   const [filterTab, setFilterTab] = useState<FilterTab>("all");
-  const [selectedCatalogueId, setSelectedCatalogueId] = useState<string | null>(null);
-  const [newQuantity, setNewQuantity] = useState("1");
+  const [selectedCatalogueIds, setSelectedCatalogueIds] = useState<string[]>([]);
+  const [newQuantityById, setNewQuantityById] = useState<Record<string, string>>({});
+  const [useDurationQtyById, setUseDurationQtyById] = useState<Record<string, boolean>>({});
   const [newOverrideRate, setNewOverrideRate] = useState("");
   const [newNotes, setNewNotes] = useState("");
-  const [useDurationQty, setUseDurationQty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -154,8 +154,9 @@ export default function ActivityCostsModal({
     if (!open) {
       setSearch("");
       setSaveError(null);
-      setSelectedCatalogueId(null);
-      setUseDurationQty(false);
+      setSelectedCatalogueIds([]);
+      setNewQuantityById({});
+      setUseDurationQtyById({});
     }
   }, [open]);
 
@@ -184,87 +185,112 @@ export default function ActivityCostsModal({
       .sort((a, b) => a.sort_order - b.sort_order || a.name.localeCompare(b.name));
   }, [catalogue, search, filterTab]);
 
-  const selectedItem = useMemo(
-    () => filteredCatalogue.find((c) => c.id === selectedCatalogueId) ?? null,
-    [filteredCatalogue, selectedCatalogueId]
+  const selectedItems = useMemo(
+    () => catalogue.filter((c) => selectedCatalogueIds.includes(c.id)),
+    [catalogue, selectedCatalogueIds]
   );
 
-  const canSuggestDuration =
-    selectedItem &&
-    (selectedItem.category === "labour" || selectedItem.category === "machinery") &&
-    isTimeBasedCostUnit(selectedItem.unit);
-
   useEffect(() => {
-    if (!selectedItem || !canSuggestDuration || !useDurationQty) return;
-    const s = suggestedQuantityFromDuration(selectedItem.unit, durationDays);
-    if (s != null) setNewQuantity(String(s));
-  }, [selectedItem, canSuggestDuration, useDurationQty, durationDays]);
-
-  const handleAdd = async () => {
-    if (!selectedItem) return;
-    const qty = Number(newQuantity);
-    if (!Number.isFinite(qty) || qty <= 0) {
-      setSaveError("Quantity must be greater than 0");
-      return;
+    if (selectedItems.length === 0) return;
+    const next: Record<string, string> = { ...newQuantityById };
+    let changed = false;
+    for (const item of selectedItems) {
+      const useAuto = useDurationQtyById[item.id] === true;
+      const canSuggest =
+        (item.category === "labour" || item.category === "machinery") &&
+        isTimeBasedCostUnit(item.unit);
+      if (!useAuto || !canSuggest) continue;
+      const s = suggestedQuantityFromDuration(item.unit, durationDays);
+      if (s != null && next[item.id] !== String(s)) {
+        next[item.id] = String(s);
+        changed = true;
+      }
     }
-    const baseRate = Number(selectedItem.unit_rate);
+    if (changed) setNewQuantityById(next);
+  }, [selectedItems, useDurationQtyById, durationDays, newQuantityById]);
+
+  const handleAddSelected = async () => {
+    if (selectedItems.length === 0) return;
     const override =
       newOverrideRate.trim() !== "" && Number.isFinite(Number(newOverrideRate))
         ? Number(newOverrideRate)
         : null;
-    const amount = computeCostLineAmount(qty, baseRate, override);
+
+    const prepared = selectedItems.map((item) => {
+      const qtyRaw = newQuantityById[item.id] ?? "1";
+      const qty = Number(qtyRaw);
+      const canSuggest =
+        (item.category === "labour" || item.category === "machinery") &&
+        isTimeBasedCostUnit(item.unit);
+      const useAuto = useDurationQtyById[item.id] === true && canSuggest;
+      const autoQty = useAuto ? suggestedQuantityFromDuration(item.unit, durationDays) : null;
+      const finalQty = autoQty != null ? autoQty : qty;
+      return {
+        item,
+        qty: finalQty,
+        baseRate: Number(item.unit_rate),
+      };
+    });
+    if (prepared.some((p) => !Number.isFinite(p.qty) || p.qty <= 0)) {
+      setSaveError("Selected items must have quantity greater than 0");
+      return;
+    }
 
     setSaving(true);
     setSaveError(null);
     try {
       if (!isPersisted) {
-        const draft: CostRecord = {
+        const drafts: CostRecord[] = prepared.map(({ item, qty, baseRate }) => ({
           id:
             typeof globalThis.crypto !== "undefined" && "randomUUID" in globalThis.crypto
               ? globalThis.crypto.randomUUID()
               : `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
           activity_id: "__draft__",
-          catalogue_item_id: selectedItem.id,
-          name: selectedItem.name,
-          unit: selectedItem.unit,
+          catalogue_item_id: item.id,
+          name: item.name,
+          unit: item.unit,
           unit_rate: baseRate,
           override_unit_rate: override,
           quantity: qty,
-          amount,
+          amount: computeCostLineAmount(qty, baseRate, override),
           cost_date: defaultCostDate,
-          category: selectedItem.category,
+          category: item.category,
           description: newNotes.trim() || null,
           created_at: new Date().toISOString(),
-        };
-        applyRecords([draft, ...costRecords]);
+        }));
+        applyRecords([...drafts, ...costRecords]);
       } else {
-        const res = await fetch("/api/planner/costs", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            activity_id: activityId,
-            catalogue_item_id: selectedItem.id,
-            category: selectedItem.category,
-            name: selectedItem.name,
-            unit: selectedItem.unit,
-            unit_rate: baseRate,
-            override_unit_rate: override,
-            quantity: qty,
-            cost_date: defaultCostDate,
-            description: newNotes.trim() || null,
-          }),
-        });
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw new Error((body as { error?: string }).error || res.statusText);
+        const createdRows: CostRecord[] = [];
+        for (const { item, qty, baseRate } of prepared) {
+          const res = await fetch("/api/planner/costs", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              activity_id: activityId,
+              catalogue_item_id: item.id,
+              category: item.category,
+              name: item.name,
+              unit: item.unit,
+              unit_rate: baseRate,
+              override_unit_rate: override,
+              quantity: qty,
+              cost_date: defaultCostDate,
+              description: newNotes.trim() || null,
+            }),
+          });
+          if (!res.ok) {
+            const body = await res.json().catch(() => ({}));
+            throw new Error((body as { error?: string }).error || res.statusText);
+          }
+          createdRows.push((await res.json()) as CostRecord);
         }
-        const created = (await res.json()) as CostRecord;
-        applyRecords([created, ...costRecords]);
+        applyRecords([...createdRows, ...costRecords]);
       }
       setNewNotes("");
       setNewOverrideRate("");
-      setNewQuantity("1");
-      setUseDurationQty(false);
+      setSelectedCatalogueIds([]);
+      setNewQuantityById({});
+      setUseDurationQtyById({});
     } catch (e) {
       setSaveError(e instanceof Error ? e.message : "Could not save cost");
     } finally {
@@ -416,7 +442,6 @@ export default function ActivityCostsModal({
                     type="button"
                     onClick={() => {
                       setFilterTab(tab);
-                      setSelectedCatalogueId(null);
                     }}
                     className={`rounded-full px-2.5 py-1 text-dashboard-xs font-medium transition-colors ${
                       filterTab === tab
@@ -435,24 +460,26 @@ export default function ActivityCostsModal({
                   <ul className="divide-y divide-dashboard-border">
                     {filteredCatalogue.map((item) => (
                       <li key={item.id}>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedCatalogueId(item.id);
-                            setUseDurationQty(false);
-                            setNewQuantity("1");
-                          }}
-                          className={`w-full px-3 py-2 text-left text-dashboard-sm transition-colors ${
-                            selectedCatalogueId === item.id
-                              ? "bg-[#5B5FEF]/15 text-dashboard-text-primary"
-                              : "text-dashboard-text-primary hover:bg-dashboard-surface"
-                          }`}
-                        >
+                        <label className="flex cursor-pointer items-center gap-2 px-3 py-2 text-dashboard-sm text-dashboard-text-primary transition-colors hover:bg-dashboard-surface">
+                          <input
+                            type="checkbox"
+                            checked={selectedCatalogueIds.includes(item.id)}
+                            onChange={(e) => {
+                              setSelectedCatalogueIds((prev) => {
+                                if (e.target.checked) return [...prev, item.id];
+                                return prev.filter((id) => id !== item.id);
+                              });
+                              if (e.target.checked) {
+                                setNewQuantityById((prev) => ({ ...prev, [item.id]: prev[item.id] ?? "1" }));
+                                setUseDurationQtyById((prev) => ({ ...prev, [item.id]: prev[item.id] ?? false }));
+                              }
+                            }}
+                          />
                           <span className="font-medium">{item.name}</span>
-                          <span className="ml-2 text-dashboard-xs text-dashboard-text-muted">
+                          <span className="ml-auto text-dashboard-xs text-dashboard-text-muted">
                             {COST_CATEGORY_LABELS[item.category]}
                           </span>
-                        </button>
+                        </label>
                       </li>
                     ))}
                   </ul>
@@ -461,48 +488,54 @@ export default function ActivityCostsModal({
             </div>
 
             <div className="space-y-3 rounded-dashboard-md border border-dashboard-border bg-dashboard-bg p-3">
-              <p className="text-dashboard-xs font-medium text-dashboard-text-secondary">Item detail & add</p>
-              {selectedItem ? (
+              <p className="text-dashboard-xs font-medium text-dashboard-text-secondary">Selected items & add</p>
+              {selectedItems.length > 0 ? (
                 <>
-                  <div className="rounded-dashboard-sm border border-dashboard-border bg-dashboard-surface p-2 text-dashboard-xs">
-                    <p className="font-medium text-dashboard-text-primary">{selectedItem.name}</p>
-                    {selectedItem.description && (
-                      <p className="mt-1 text-dashboard-text-secondary">{selectedItem.description}</p>
-                    )}
-                    <dl className="mt-2 grid grid-cols-2 gap-1 text-dashboard-text-muted">
-                      <dt>Unit</dt>
-                      <dd className="text-dashboard-text-primary">{selectedItem.unit}</dd>
-                      <dt>Unit rate</dt>
-                      <dd className="text-dashboard-text-primary">${formatCost(Number(selectedItem.unit_rate))}</dd>
-                    </dl>
+                  <div className="max-h-52 space-y-2 overflow-y-auto rounded-dashboard-sm border border-dashboard-border bg-dashboard-surface p-2">
+                    {selectedItems.map((item) => {
+                      const canSuggest =
+                        (item.category === "labour" || item.category === "machinery") &&
+                        isTimeBasedCostUnit(item.unit);
+                      const useAuto = useDurationQtyById[item.id] === true;
+                      return (
+                        <div key={item.id} className="rounded-dashboard-sm border border-dashboard-border bg-dashboard-bg p-2 text-dashboard-xs">
+                          <div className="mb-1 flex items-center justify-between gap-2">
+                            <p className="font-medium text-dashboard-text-primary">{item.name}</p>
+                            <span className="text-dashboard-text-muted">${formatCost(Number(item.unit_rate))}/{item.unit}</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="mb-1 block text-dashboard-text-secondary">Quantity</label>
+                              <input
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                value={newQuantityById[item.id] ?? "1"}
+                                onChange={(e) =>
+                                  setNewQuantityById((prev) => ({ ...prev, [item.id]: e.target.value }))
+                                }
+                                disabled={saving || (useAuto && canSuggest)}
+                                className={inputClass}
+                              />
+                            </div>
+                            {canSuggest && (
+                              <label className="mt-6 flex cursor-pointer items-center gap-2 text-dashboard-xs text-dashboard-text-secondary">
+                                <input
+                                  type="checkbox"
+                                  checked={useAuto}
+                                  onChange={(e) =>
+                                    setUseDurationQtyById((prev) => ({ ...prev, [item.id]: e.target.checked }))
+                                  }
+                                />
+                                Auto qty ({durationDays}d{item.unit.toLowerCase().match(/hour|hr/) ? " × 8h" : ""})
+                              </label>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
                   </div>
-                  {canSuggestDuration && (
-                    <label className="flex cursor-pointer items-center gap-2 text-dashboard-xs text-dashboard-text-secondary">
-                      <input
-                        type="checkbox"
-                        checked={useDurationQty}
-                        onChange={(e) => setUseDurationQty(e.target.checked)}
-                      />
-                      Auto quantity from activity duration ({durationDays} day{durationDays !== 1 ? "s" : ""}
-                      {selectedItem.unit.toLowerCase().match(/hour|hr/)
-                        ? " × 8 h/day for hour rates"
-                        : ""}
-                      )
-                    </label>
-                  )}
                   <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Quantity</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        value={newQuantity}
-                        onChange={(e) => setNewQuantity(e.target.value)}
-                        disabled={saving || (useDurationQty && !!canSuggestDuration)}
-                        className={inputClass}
-                      />
-                    </div>
                     <div>
                       <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">
                         Override rate ($) <span className="text-dashboard-text-muted">optional</span>
@@ -513,7 +546,11 @@ export default function ActivityCostsModal({
                         min="0"
                         value={newOverrideRate}
                         onChange={(e) => setNewOverrideRate(e.target.value)}
-                        placeholder={`Default ${formatCost(Number(selectedItem.unit_rate))}`}
+                        placeholder={
+                          selectedItems.length === 1
+                            ? `Default ${formatCost(Number(selectedItems[0].unit_rate))}`
+                            : "Applies to all selected"
+                        }
                         className={inputClass}
                       />
                     </div>
@@ -529,15 +566,17 @@ export default function ActivityCostsModal({
                   </div>
                   <button
                     type="button"
-                    disabled={saving || !newQuantity.trim()}
-                    onClick={() => void handleAdd()}
+                    disabled={saving || selectedItems.length === 0}
+                    onClick={() => void handleAddSelected()}
                     className="w-full rounded-dashboard-sm bg-gradient-to-r from-[#5B5FEF] to-[#6D72F6] px-3 py-2 text-dashboard-sm font-medium text-white shadow-dashboard-card disabled:opacity-50"
                   >
-                    {saving ? "Saving…" : "Add to activity"}
+                    {saving
+                      ? "Saving…"
+                      : `Add ${selectedItems.length} selected to activity`}
                   </button>
                 </>
               ) : (
-                <p className="text-dashboard-xs text-dashboard-text-muted">Select a catalogue item from the list.</p>
+                <p className="text-dashboard-xs text-dashboard-text-muted">Select one or more catalogue items with checkboxes.</p>
               )}
             </div>
           </div>

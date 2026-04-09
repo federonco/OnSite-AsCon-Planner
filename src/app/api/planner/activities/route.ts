@@ -22,6 +22,12 @@ type CostEntryInput = {
   created_at: string;
 };
 
+type BudgetAllocationInput = {
+  cost_code: string;
+  amount: number;
+  note: string | null;
+};
+
 function sanitizeCostEntries(raw: unknown): CostEntryInput[] {
   if (!Array.isArray(raw)) return [];
   const validCategories = new Set(["machinery", "labour", "materials"]);
@@ -61,6 +67,24 @@ function sanitizeCostEntries(raw: unknown): CostEntryInput[] {
       description:
         r.description != null && String(r.description).trim() !== "" ? String(r.description) : null,
       created_at: String(r.created_at ?? new Date().toISOString()),
+    });
+  }
+  return out;
+}
+
+function sanitizeBudgetAllocations(raw: unknown): BudgetAllocationInput[] {
+  if (!Array.isArray(raw)) return [];
+  const out: BudgetAllocationInput[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== "object") continue;
+    const r = item as Record<string, unknown>;
+    const cost_code = String(r.cost_code ?? "").trim();
+    const amount = Number(r.amount);
+    if (!cost_code || !Number.isFinite(amount) || amount < 0) continue;
+    out.push({
+      cost_code,
+      amount,
+      note: r.note != null && String(r.note).trim() !== "" ? String(r.note).trim() : null,
     });
   }
   return out;
@@ -269,7 +293,13 @@ export async function POST(req: NextRequest) {
     Number.isFinite(rawProgress) ? Math.min(100, Math.max(0, Math.round(rawProgress))) : 0;
 
   const rawBudget = Number(body.budget_amount);
-  const budget_amount = Number.isFinite(rawBudget) ? rawBudget : null;
+  const budget_allocations = sanitizeBudgetAllocations(body.budget_allocations);
+  const budget_amount =
+    budget_allocations.length > 0
+      ? budget_allocations.reduce((sum, row) => sum + row.amount, 0)
+      : Number.isFinite(rawBudget)
+        ? rawBudget
+        : null;
   const cost_entries = sanitizeCostEntries(body.cost_entries);
 
   const row = {
@@ -287,6 +317,7 @@ export async function POST(req: NextRequest) {
     sort_order: body.sort_order ?? 0,
     progress_percent,
     budget_amount,
+    budget_allocations,
     cost_entries,
   };
 
@@ -344,7 +375,7 @@ export async function PUT(req: NextRequest) {
   const allowed = [
     "name", "start_date", "end_date", "status", "notes",
     "wbs_code", "sort_order", "progress_percent",
-    "drainer_section_id", "drainer_segment_id", "budget_amount", "cost_entries",
+    "drainer_section_id", "drainer_segment_id", "budget_amount", "budget_allocations", "cost_entries",
   ];
   const filtered: Record<string, unknown> = {};
   for (const key of allowed) {
@@ -356,6 +387,13 @@ export async function PUT(req: NextRequest) {
       } else if (key === "budget_amount") {
         const v = Number(updates.budget_amount);
         filtered[key] = Number.isFinite(v) ? v : null;
+      } else if (key === "budget_allocations") {
+        const allocs = sanitizeBudgetAllocations(updates.budget_allocations);
+        filtered[key] = allocs;
+        filtered.budget_amount =
+          allocs.length > 0
+            ? allocs.reduce((sum, row) => sum + row.amount, 0)
+            : filtered.budget_amount ?? null;
       } else if (key === "cost_entries") {
         filtered[key] = sanitizeCostEntries(updates.cost_entries);
       } else {

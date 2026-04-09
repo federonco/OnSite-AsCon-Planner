@@ -36,6 +36,17 @@ const iconDailyNotes = (
     <path d="M8 8h8M8 12h8M8 16h5" strokeLinecap="round" />
   </svg>
 );
+const iconCost = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+    <path d="M4 7h16M4 12h16M4 17h10" strokeLinecap="round" />
+    <circle cx="18" cy="17" r="3" />
+  </svg>
+);
+const iconWbs = (
+  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.75" aria-hidden>
+    <path d="M4 6h6v4H4zM14 6h6M14 10h6M4 14h6v4H4zM14 14h6M14 18h6" strokeLinecap="round" strokeLinejoin="round" />
+  </svg>
+);
 
 export interface SidebarProps {
   activeId?: string;
@@ -149,6 +160,20 @@ export function Sidebar({ activeId = "schedule", collapsed: collapsedProp, onCol
           icon={iconCalendar}
           label="Planner"
           active={activeId === "schedule"}
+          collapsed={collapsed}
+        />
+        <SidebarItem
+          href="/planner/cost"
+          icon={iconCost}
+          label="Cost"
+          active={activeId === "cost"}
+          collapsed={collapsed}
+        />
+        <SidebarItem
+          href="/planner/wbs"
+          icon={iconWbs}
+          label="WBS"
+          active={activeId === "wbs"}
           collapsed={collapsed}
         />
         <SidebarItem

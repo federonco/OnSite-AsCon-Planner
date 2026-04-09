@@ -91,10 +91,34 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  const sections: DrainerSectionListItem[] = (data ?? []).map((row) => ({
-    id: String(row.id),
-    name: String(row.name ?? "").trim() || "Section",
-  }));
+  const sectionIds = (data ?? []).map((row) => String(row.id));
+  const estEndBySection = new Map<string, string>();
+  if (sectionIds.length > 0) {
+    const { data: acts, error: actErr } = await supabase
+      .from("planner_activities")
+      .select("drainer_section_id,end_date")
+      .eq("crew_id", crewId)
+      .in("drainer_section_id", sectionIds)
+      .not("end_date", "is", null);
+    if (!actErr) {
+      for (const a of acts ?? []) {
+        const sid = String(a.drainer_section_id ?? "").trim();
+        const end = String(a.end_date ?? "").trim();
+        if (!sid || !/^\d{4}-\d{2}-\d{2}$/.test(end)) continue;
+        const prev = estEndBySection.get(sid);
+        if (!prev || end > prev) estEndBySection.set(sid, end);
+      }
+    }
+  }
+
+  const sections: DrainerSectionListItem[] = (data ?? []).map((row) => {
+    const id = String(row.id);
+    return {
+      id,
+      name: String(row.name ?? "").trim() || "Section",
+      estimated_end_date: estEndBySection.get(id) ?? null,
+    };
+  });
 
   return NextResponse.json({ sections });
 }

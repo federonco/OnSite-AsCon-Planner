@@ -38,8 +38,16 @@ export interface PlannerActivity {
   import_meta?: Record<string, unknown> | null;
   /** Budget baseline for cost tracking (nullable — not every activity has a budget). */
   budget_amount: number | null;
+  /** Budget split per cost code (planning-only, not actual costs). */
+  budget_allocations?: PlannerBudgetAllocation[];
   /** Assigned cost lines stored in planner_activities.cost_entries JSONB. */
   cost_entries?: PlannerAssignedCostEntry[];
+}
+
+export interface PlannerBudgetAllocation {
+  cost_code: string;
+  amount: number;
+  note?: string | null;
 }
 
 export interface PlannerDependency {
@@ -69,6 +77,7 @@ export interface PlannerPeopleLeave {
 export interface DrainerSectionListItem {
   id: string;
   name: string;
+  estimated_end_date?: string | null;
 }
 
 /** Payload for creating an activity */
@@ -90,6 +99,7 @@ export interface CreateActivityPayload {
   dependency_type?: DependencyType | null;
   dependency_lag_days?: number | null;
   budget_amount?: number | null;
+  budget_allocations?: PlannerBudgetAllocation[];
   cost_entries?: PlannerAssignedCostEntry[];
 }
 
@@ -110,6 +120,7 @@ export interface UpdateActivityPayload {
   dependency_type?: DependencyType | null;
   dependency_lag_days?: number | null;
   budget_amount?: number | null;
+  budget_allocations?: PlannerBudgetAllocation[];
   cost_entries?: PlannerAssignedCostEntry[];
 }
 
@@ -148,6 +159,7 @@ export interface PlannerWbsItem {
   code: string;
   label: string | null;
   sort_order: number;
+  budget_amount?: number | null;
   is_active: boolean;
   created_at: string;
   updated_at: string;
