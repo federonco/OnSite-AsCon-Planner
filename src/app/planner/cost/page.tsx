@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AppShell } from "@/components/ui/AppShell";
 import { Sidebar } from "@/components/ui/Sidebar";
@@ -99,7 +99,7 @@ function qtyFromUnit(unit: string, shiftDuration: number): number {
   return 1;
 }
 
-export default function PlannerCostPage() {
+function PlannerCostPageContent() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -654,6 +654,14 @@ export default function PlannerCostPage() {
       </div>
       <PlannerCostLibraryModal open={showCostLibrary} onClose={() => setShowCostLibrary(false)} />
     </AppShell>
+  );
+}
+
+export default function PlannerCostPage() {
+  return (
+    <Suspense fallback={null}>
+      <PlannerCostPageContent />
+    </Suspense>
   );
 }
 
