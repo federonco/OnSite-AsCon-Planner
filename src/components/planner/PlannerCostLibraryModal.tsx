@@ -117,9 +117,9 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
   }, [open]);
 
   useEffect(() => {
-    if (!showWbsLibrary) return;
+    if (!open) return;
     void loadWbs();
-  }, [showWbsLibrary, loadWbs]);
+  }, [open, loadWbs]);
 
   useEffect(() => {
     void load();
@@ -498,14 +498,28 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                 />
               </div>
               <div>
-                <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Cost code</label>
-                <input
+                <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">WBS code</label>
+                <select
                   value={formCostCode}
                   onChange={(e) => setFormCostCode(e.target.value)}
-                  placeholder="e.g. NS020"
                   className={inputClass}
-                  disabled={saving}
-                />
+                  disabled={saving || wbsLoading}
+                >
+                  <option value="">No WBS code</option>
+                  {formCostCode &&
+                    !wbsItems.some((w) => w.code === formCostCode) && (
+                      <option value={formCostCode}>{formCostCode} (legacy)</option>
+                    )}
+                  {wbsItems
+                    .filter((w) => w.is_active)
+                    .sort((a, b) => a.sort_order - b.sort_order || a.code.localeCompare(b.code))
+                    .map((w) => (
+                      <option key={w.id} value={w.code}>
+                        {w.code}
+                        {w.label ? ` — ${w.label}` : ""}
+                      </option>
+                    ))}
+                </select>
               </div>
               <div>
                 <label className="mb-1 block text-dashboard-xs text-dashboard-text-secondary">Unit *</label>
@@ -728,7 +742,7 @@ export default function PlannerCostLibraryModal({ open, onClose }: PlannerCostLi
                     <th className="px-3 py-2 font-medium">Name</th>
                     <th className="px-3 py-2 font-medium">Company</th>
                     <th className="px-3 py-2 font-medium">Description</th>
-                    <th className="px-3 py-2 font-medium">Cost code</th>
+                    <th className="px-3 py-2 font-medium">WBS code</th>
                     <th className="px-3 py-2 font-medium">Unit</th>
                     <th className="px-3 py-2 font-medium text-right">Rate</th>
                     <th className="px-3 py-2 font-medium text-right">Order</th>
