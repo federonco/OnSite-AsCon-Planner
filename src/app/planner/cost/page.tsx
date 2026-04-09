@@ -199,8 +199,18 @@ export default function PlannerCostPage() {
           : "/api/planner/cost/forecast";
     fetch(`${base}?${query}`)
       .then(async (res) => {
-        const body = (await res.json().catch(() => ({}))) as DailyPayload | AccrualPayload | ForecastPayload | { error?: string };
-        if (!res.ok) throw new Error(String(body.error ?? res.statusText));
+        const body = (await res.json().catch(() => ({}))) as
+          | DailyPayload
+          | AccrualPayload
+          | ForecastPayload
+          | { error?: string };
+        if (!res.ok) {
+          const errMsg =
+            body && typeof body === "object" && "error" in body
+              ? String((body as { error?: unknown }).error ?? res.statusText)
+              : res.statusText;
+          throw new Error(errMsg);
+        }
         setPayload(body as DailyPayload | AccrualPayload | ForecastPayload);
       })
       .catch((e) => setError(e instanceof Error ? e.message : "Could not load cost data"))
@@ -311,7 +321,20 @@ export default function PlannerCostPage() {
         };
         if (!res.ok) throw new Error(String(body.error ?? "Could not load day allocations"));
         const rows = Array.isArray(body.rows) ? body.rows : [];
-        const map = new Map<string, { lines: Array<{ item_name: string; quantity: number; unit: string; amount: number }>; total: number }>();
+        const map = new Map<
+          string,
+          {
+            lines: Array<{
+              id: string;
+              item_name: string;
+              quantity: number;
+              unit: string;
+              amount: number;
+              category: "labour" | "machinery" | "materials";
+            }>;
+            total: number;
+          }
+        >();
         const byCat = { labour: 0, machinery: 0, materials: 0 };
         for (const r of rows) {
           const code = String(r.wbs_code ?? "").trim() || "Uncoded";
